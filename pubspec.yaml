@@ -1,0 +1,23 @@
+name: kamidrop
+description: KamiDrop — швидкий локальний друк на мережеві принтери (IPP + AirPrint-растр).
+publish_to: none
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  multicast_dns: ^0.3.2
+  file_selector: ^1.0.3
+  pdfrx: ^2.6.0
+  path_provider: ^2.1.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
