@@ -16,6 +16,8 @@ PageLayout _simple({required bool landscape, required int cw, required int ch, r
     clipY0: 0,
     clipX1: cw,
     clipY1: ch,
+    safeX1: cw,
+    safeY1: ch,
   );
 }
 
@@ -113,6 +115,7 @@ void main() {
     const lay = PageLayout(
       landscape: false, canvasW: 4, canvasH: 4, renderW: 4, renderH: 4, ox: 0, oy: 0,
       clipX0: 1, clipY0: 1, clipX1: 3, clipY1: 3, // лише центр 2×2
+      safeX1: 4, safeY1: 4,
     );
     final page = composePage(src, lay, pageW: 4, pageH: 4, dpi: 72, color: false);
     expect(page.pixels[0], 255, reason: 'кут поза рамкою лишається білим');
@@ -131,5 +134,48 @@ void main() {
       color: false,
     );
     expect(page.pixels[0], closeTo(127, 1));
+  });
+
+  test('Поля принтера: рамка 10×15 «вгорі» не заходить у недрукову смугу', () {
+    const photo = ContentSize(4000, 3000);
+    const xerox = SheetMargins.all(4.4);
+    final l = computeLayout(
+      photo,
+      const LayoutOptions(photoSize: PhotoSize('10×15', 102, 152), anchor: LayoutAnchor.top),
+      pageW: pageW,
+      pageH: pageH,
+      dpi: dpi,
+      printerMargins: xerox,
+    );
+    final m = (4.4 * dpi / 25.4).round();
+    final pxPerMm = dpi / 25.4;
+    expect(l.landscape, isTrue);
+    expect(l.clipX0, m);
+    expect(l.clipY0, m);
+    expect(l.clipX1 - l.clipX0, closeTo(152 * pxPerMm, 2), reason: 'розмір рамки не зменшується');
+    expect(l.clipY1 - l.clipY0, closeTo(102 * pxPerMm, 2));
+    expect([l.safeX0, l.safeY0, l.safeX1, l.safeY1], [m, m, l.canvasW - m, l.canvasH - m]);
+  });
+
+  test('Поля принтера повертаються разом з альбомним полотном', () {
+    // Широке поле знизу аркуша (як у струменевих) — на альбомному полотні воно ліворуч.
+    const margins = SheetMargins(top: 3, bottom: 12, left: 3, right: 3);
+    final l = computeLayout(const ContentSize(842, 595), const LayoutOptions(),
+        pageW: pageW, pageH: pageH, dpi: dpi, printerMargins: margins);
+    int px(double mm) => (mm * dpi / 25.4).round();
+    expect(l.landscape, isTrue);
+    expect(l.safeX0, px(12), reason: 'низ аркуша');
+    expect(l.safeY0, px(3), reason: 'лівий край аркуша');
+    expect(l.canvasW - l.safeX1, px(3), reason: 'верх аркуша');
+    final p = computeLayout(a4, const LayoutOptions(), pageW: pageW, pageH: pageH, dpi: dpi, printerMargins: margins);
+    expect(p.canvasH - p.safeY1, px(12));
+    expect(p.clipY1, p.safeY1);
+  });
+
+  test('Поля користувача більші за поля принтера — перемагають', () {
+    final l = computeLayout(a4, const LayoutOptions(marginMm: 10),
+        pageW: pageW, pageH: pageH, dpi: dpi, printerMargins: const SheetMargins.all(4.4));
+    expect(l.clipX0, (10 * dpi / 25.4).round());
+    expect(l.safeX0, (4.4 * dpi / 25.4).round());
   });
 }

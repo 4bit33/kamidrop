@@ -26,7 +26,13 @@ Uint8List _fakeBrotherResponse() {
     ..strings(IppTag.name, 'marker-names', ['M', 'BK'])
     ..strings(IppTag.name, 'marker-colors', ['#FF00FF', '#000000'])
     ..integer('marker-levels', 50)
-    ..integer('', 81);
+    ..integer('', 81)
+    // Як у справжнього Brother: 0 — без полів, 300 — звичайні 3 мм, 1200 — для інших носіїв.
+    ..integer('media-top-margin-supported', 300)
+    ..integer('', 0)
+    ..integer('', 1200)
+    ..integer('media-left-margin-supported', 300)
+    ..integer('', 0);
   return b.build();
 }
 
@@ -56,5 +62,12 @@ void main() {
     expect(caps.printerHandlesCopies, isFalse, reason: 'TXT copies=F');
     expect(caps.maxCopies, 99);
     expect(caps.markers.map((m) => m.level), [50, 81]);
+  });
+
+  test('Поля принтера: найменше ненульове значення, у мм', () {
+    final caps = PrinterCapabilities.fromIpp(parseIppResponse(_fakeBrotherResponse()));
+    expect(caps.margins.top, 3.0);
+    expect(caps.margins.left, 3.0);
+    expect(caps.margins.bottom, 0, reason: 'атрибута немає — поле невідоме');
   });
 }

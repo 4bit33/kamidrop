@@ -33,6 +33,16 @@ class ContentSize {
 
 enum LayoutOrientation { auto, portrait, landscape }
 
+/// Поля аркуша, куди принтер фізично не друкує, мм (для книжкового аркуша; top — верх растру).
+class SheetMargins {
+  final double top, bottom, left, right;
+  const SheetMargins({this.top = 0, this.bottom = 0, this.left = 0, this.right = 0});
+  const SheetMargins.all(double v) : this(top: v, bottom: v, left: v, right: v);
+  static const zero = SheetMargins();
+
+  bool get isZero => top == 0 && bottom == 0 && left == 0 && right == 0;
+}
+
 enum LayoutScale { fit, fill, actual, custom }
 
 enum LayoutAnchor { center, top }
@@ -96,6 +106,7 @@ class PageLayout {
   final int renderW, renderH; // у якому розмірі рендерити вміст
   final int ox, oy; // де лежить лівий верхній кут вмісту (може бути від'ємним при кадруванні)
   final int clipX0, clipY0, clipX1, clipY1; // видима область (поля або рамка фото)
+  final int safeX0, safeY0, safeX1, safeY1; // область, яку принтер здатен надрукувати
 
   const PageLayout({
     required this.landscape,
@@ -109,6 +120,10 @@ class PageLayout {
     required this.clipY0,
     required this.clipX1,
     required this.clipY1,
+    this.safeX0 = 0,
+    this.safeY0 = 0,
+    required this.safeX1,
+    required this.safeY1,
   });
 }
 
@@ -118,6 +133,7 @@ PageLayout computeLayout(
   required int pageW,
   required int pageH,
   required int dpi,
+  SheetMargins printerMargins = SheetMargins.zero,
 }) {
   final landscape = switch (o.orientation) {
     LayoutOrientation.auto => content.isLandscape,
@@ -127,8 +143,14 @@ PageLayout computeLayout(
   final cw = landscape ? pageH : pageW;
   final ch = landscape ? pageW : pageH;
   final pxPerMm = dpi / 25.4;
-  final m = (o.marginMm * pxPerMm).round().clamp(0, math.min(cw, ch) ~/ 3);
-  final ax0 = m, ay0 = m, aw = cw - 2 * m, ah = ch - 2 * m;
+  // Поля принтера в координатах полотна. Альбомне полотно лягає на аркуш повернутим на 90°
+  // проти годинникової: його верх — лівий край аркуша, лівий бік — низ аркуша.
+  final pm = printerMargins;
+  final (hl, ht, hr, hb) = landscape ? (pm.bottom, pm.left, pm.top, pm.right) : (pm.left, pm.top, pm.right, pm.bottom);
+  final maxM = math.min(cw, ch) ~/ 3;
+  int side(double hwMm) => (math.max(o.marginMm, hwMm) * pxPerMm).round().clamp(0, maxM);
+  final ax0 = side(hl), ay0 = side(ht);
+  final aw = cw - ax0 - side(hr), ah = ch - ay0 - side(hb);
   final w = content.width, h = content.height;
 
   double scale;
@@ -185,6 +207,10 @@ PageLayout computeLayout(
     clipY0: boxY.clamp(0, ch),
     clipX1: (boxX + boxW).clamp(0, cw),
     clipY1: (boxY + boxH).clamp(0, ch),
+    safeX0: (hl * pxPerMm).round().clamp(0, maxM),
+    safeY0: (ht * pxPerMm).round().clamp(0, maxM),
+    safeX1: cw - (hr * pxPerMm).round().clamp(0, maxM),
+    safeY1: ch - (hb * pxPerMm).round().clamp(0, maxM),
   );
 }
 

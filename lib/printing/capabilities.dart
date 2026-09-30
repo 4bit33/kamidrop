@@ -1,4 +1,5 @@
 import '../ipp/ipp.dart';
+import 'compose.dart';
 import 'urf.dart';
 
 /// Витратний матеріал (картридж/тонер) з атрибутів marker-*.
@@ -31,6 +32,7 @@ class PrinterCapabilities {
   final bool printerHandlesCopies;
   final int maxCopies;
   final List<String> media;
+  final SheetMargins margins; // куди принтер не друкує (без запиту «без полів»)
   final List<Marker> markers;
 
   const PrinterCapabilities({
@@ -47,6 +49,7 @@ class PrinterCapabilities {
     required this.printerHandlesCopies,
     required this.maxCopies,
     required this.media,
+    this.margins = SheetMargins.zero,
     required this.markers,
   });
 
@@ -108,6 +111,13 @@ class PrinterCapabilities {
         ),
     ];
 
+    // media-*-margin-supported — у сотих мм. 0 означає друк без полів, а він потребує окремого
+    // запиту в media-col, тож беремо найменше ненульове значення.
+    double margin(String edge) {
+      final v = r.all<int>('media-$edge-margin-supported').where((m) => m > 0);
+      return v.isEmpty ? 0 : v.reduce((a, b) => a < b ? a : b) / 100;
+    }
+
     final sides = r.all<String>('sides-supported');
     final colorModes = r.all<String>('print-color-mode-supported');
 
@@ -125,6 +135,7 @@ class PrinterCapabilities {
       printerHandlesCopies: creation.contains('copies') && txtCopies != 'F',
       maxCopies: copiesRange?.upper ?? 1,
       media: r.all<String>('media-supported'),
+      margins: SheetMargins(top: margin('top'), bottom: margin('bottom'), left: margin('left'), right: margin('right')),
       markers: markers,
     );
   }

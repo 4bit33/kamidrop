@@ -17,6 +17,7 @@ class LayoutEditor extends StatelessWidget {
     required this.layout,
     required this.onChanged,
     required this.onIndexChanged,
+    this.printerMargins = SheetMargins.zero,
     this.enabled = true,
   });
 
@@ -26,6 +27,7 @@ class LayoutEditor extends StatelessWidget {
   final LayoutOptions layout;
   final ValueChanged<LayoutOptions> onChanged;
   final ValueChanged<int> onIndexChanged;
+  final SheetMargins printerMargins;
   final bool enabled;
 
   @override
@@ -53,7 +55,8 @@ class LayoutEditor extends StatelessWidget {
       children: [
         SizedBox(
           height: 260,
-          child: SheetPreview(size: source.pageSize(index), image: image, layout: layout),
+          child:
+              SheetPreview(size: source.pageSize(index), image: image, layout: layout, printerMargins: printerMargins),
         ),
         if (source.pageCount > 1)
           Row(
@@ -150,27 +153,38 @@ class LayoutEditor extends StatelessWidget {
 
 /// Превʼю аркуша. Використовує той самий computeLayout, що й друк, тож що бачиш — те й друкується.
 class SheetPreview extends StatelessWidget {
-  const SheetPreview({super.key, required this.size, required this.image, required this.layout});
+  const SheetPreview({
+    super.key,
+    required this.size,
+    required this.image,
+    required this.layout,
+    this.printerMargins = SheetMargins.zero,
+  });
 
   final ContentSize size;
   final ui.Image? image;
   final LayoutOptions layout;
+  final SheetMargins printerMargins;
 
   static const _dpi = 40; // «віртуальна» роздільність превʼю
 
   @override
   Widget build(BuildContext context) {
-    final lay = computeLayout(size, layout, pageW: a4WidthPx(_dpi), pageH: a4HeightPx(_dpi), dpi: _dpi);
-    return CustomPaint(painter: _SheetPainter(lay, image, showCutLines: layout.photoSize != null));
+    final lay = computeLayout(size, layout,
+        pageW: a4WidthPx(_dpi), pageH: a4HeightPx(_dpi), dpi: _dpi, printerMargins: printerMargins);
+    return CustomPaint(
+      painter: _SheetPainter(lay, image, showCutLines: layout.photoSize != null, showSafeArea: !printerMargins.isZero),
+    );
   }
 }
 
 class _SheetPainter extends CustomPainter {
-  _SheetPainter(this.lay, this.image, {required this.showCutLines});
+  _SheetPainter(this.lay, this.image, {required this.showCutLines, required this.showSafeArea});
 
   final PageLayout lay;
   final ui.Image? image;
   final bool showCutLines;
+  final bool showSafeArea;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -186,9 +200,28 @@ class _SheetPainter extends CustomPainter {
     // Аркуш із легкою тінню.
     canvas.drawRect(sheet.shift(const Offset(0, 2)), Paint()..color = Kami.sumi.withValues(alpha: 0.08));
     canvas.drawRect(sheet, Paint()..color = Colors.white);
-    canvas.drawRect(sheet, Paint()
-      ..color = Kami.line
-      ..style = PaintingStyle.stroke);
+    canvas.drawRect(
+        sheet,
+        Paint()
+          ..color = Kami.line
+          ..style = PaintingStyle.stroke);
+
+    // Смуга по краю, куди принтер не дістає.
+    if (showSafeArea) {
+      final safe = Rect.fromLTRB(
+        sheet.left + lay.safeX0 * s,
+        sheet.top + lay.safeY0 * s,
+        sheet.left + lay.safeX1 * s,
+        sheet.top + lay.safeY1 * s,
+      );
+      canvas.drawPath(
+        Path()
+          ..fillType = PathFillType.evenOdd
+          ..addRect(sheet)
+          ..addRect(safe),
+        Paint()..color = Kami.line.withValues(alpha: 0.6),
+      );
+    }
 
     final clip = Rect.fromLTRB(
       sheet.left + lay.clipX0 * s,
@@ -214,10 +247,12 @@ class _SheetPainter extends CustomPainter {
     canvas.restore();
 
     if (showCutLines) {
-      canvas.drawRect(clip, Paint()
-        ..color = Kami.stone
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 0.8);
+      canvas.drawRect(
+          clip,
+          Paint()
+            ..color = Kami.stone
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 0.8);
     }
   }
 

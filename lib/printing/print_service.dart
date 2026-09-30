@@ -96,7 +96,8 @@ Stream<PrintProgress> printDocument(
         'Готую сторінку ${i + 1} з ${selected.length}…',
         fraction: i / selected.length,
       );
-      final lay = computeLayout(source.pageSize(selected[i]), layout, pageW: pageW, pageH: pageH, dpi: dpi);
+      final lay = computeLayout(source.pageSize(selected[i]), layout,
+          pageW: pageW, pageH: pageH, dpi: dpi, printerMargins: caps.margins);
       final px = await source.render(selected[i], width: lay.renderW, height: lay.renderH);
       encoded.add(await _encodeInIsolate(
         px,
