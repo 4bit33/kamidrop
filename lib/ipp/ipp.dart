@@ -28,6 +28,7 @@ class IppTag {
 
 class IppOp {
   static const printJob = 0x0002;
+  static const cancelJob = 0x0008;
   static const getJobAttributes = 0x0009;
   static const getPrinterAttributes = 0x000B;
 }

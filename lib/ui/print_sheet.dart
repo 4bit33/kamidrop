@@ -62,6 +62,7 @@ class _PrintSheetState extends State<PrintSheet> {
 
   PrintProgress? _progress;
   StreamSubscription<PrintProgress>? _sub;
+  PrintCancel? _cancel; // поточний друк; null — нічого скасовувати
 
   bool get _busy => (_progress != null && !_progress!.finished) || _opening;
 
@@ -198,7 +199,9 @@ class _PrintSheetState extends State<PrintSheet> {
     return parsePageRange(_pagesController.text, s.pageCount);
   }
 
-  void _start(Stream<PrintProgress> stream) {
+  void _start(Stream<PrintProgress> Function(PrintCancel cancel) print) {
+    final cancel = _cancel = PrintCancel();
+    final stream = print(cancel);
     setState(() => _progress = const PrintProgress(PrintStage.preparing, 'Готуюсь…'));
     _sub?.cancel();
     _sub = stream.listen((p) {
@@ -351,7 +354,7 @@ class _PrintSheetState extends State<PrintSheet> {
                       ? null
                       : () {
                           _remember();
-                          _start(printDocument(p, source, _options(), pages: pages, layout: _layout));
+                          _start((c) => printDocument(p, source, _options(), pages: pages, layout: _layout, cancel: c));
                         },
                   icon: const Icon(Icons.print),
                   label: Text(source == null
@@ -364,7 +367,7 @@ class _PrintSheetState extends State<PrintSheet> {
                       ? null
                       : () {
                           _remember(withLayout: false);
-                          _start(printTestPage(p, _options()));
+                          _start((c) => printTestPage(p, _options(), cancel: c));
                         },
                   style: TextButton.styleFrom(foregroundColor: Kami.stone),
                   child: const Text('Тестова сторінка'),
@@ -375,6 +378,18 @@ class _PrintSheetState extends State<PrintSheet> {
                 if (_progress != null) ...[
                   const SizedBox(height: 8),
                   _ProgressView(progress: _progress!),
+                  if (!_progress!.finished)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: _cancel == null || _cancel!.isCancelled
+                            ? null
+                            : () => setState(() => _cancel!.cancel()),
+                        icon: const Icon(Icons.close, size: 18),
+                        label: Text(_cancel?.isCancelled ?? false ? 'Скасовую…' : 'Скасувати'),
+                        style: TextButton.styleFrom(foregroundColor: Kami.shu),
+                      ),
+                    ),
                 ],
               ],
             ],
@@ -474,6 +489,7 @@ class _ProgressView extends StatelessWidget {
     final (icon, color) = switch (progress.stage) {
       PrintStage.done => (Icons.check_circle, Kami.matcha),
       PrintStage.failed => (Icons.error_outline, Kami.shu),
+      PrintStage.cancelled => (Icons.block, Kami.stone),
       _ => (null, Kami.stone),
     };
     return Column(

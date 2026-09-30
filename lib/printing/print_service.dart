@@ -11,7 +11,7 @@ import 'sources.dart';
 import 'test_page.dart';
 import 'urf.dart';
 
-enum PrintStage { preparing, rendering, sending, waiting, done, failed }
+enum PrintStage { preparing, rendering, sending, waiting, done, failed, cancelled }
 
 class PrintProgress {
   final PrintStage stage;
@@ -19,8 +19,24 @@ class PrintProgress {
   final double? fraction;
   const PrintProgress(this.stage, this.message, {this.fraction});
 
-  bool get finished => stage == PrintStage.done || stage == PrintStage.failed;
+  bool get finished => stage == PrintStage.done || stage == PrintStage.failed || stage == PrintStage.cancelled;
 }
+
+/// Кнопка «Скасувати»: друк перевіряє її між сторінками, після надсилання й під час очікування.
+class PrintCancel {
+  final _completer = Completer<void>();
+
+  bool get isCancelled => _completer.isCompleted;
+
+  /// Завершується в момент скасування — щоб не чекати чергового опитування принтера.
+  Future<void> get whenCancelled => _completer.future;
+
+  void cancel() {
+    if (!_completer.isCompleted) _completer.complete();
+  }
+}
+
+const _cancelledBeforeSend = PrintProgress(PrintStage.cancelled, 'Скасовано — на принтер нічого не надіслано');
 
 class PrintOptions {
   final bool color;
@@ -42,7 +58,7 @@ const _jobStates = {
 String _userName() => Platform.environment['USER'] ?? Platform.environment['USERNAME'] ?? 'kamidrop';
 
 /// Вбудована тестова сторінка. Друга сторінка (BACK) потрібна лише для перевірки дуплексу.
-Stream<PrintProgress> printTestPage(DiscoveredPrinter printer, PrintOptions options) async* {
+Stream<PrintProgress> printTestPage(DiscoveredPrinter printer, PrintOptions options, {PrintCancel? cancel}) async* {
   final caps = printer.capabilities;
   if (caps == null) {
     yield const PrintProgress(PrintStage.failed, 'Можливості принтера ще не відомі');
@@ -52,7 +68,8 @@ Stream<PrintProgress> printTestPage(DiscoveredPrinter printer, PrintOptions opti
   final duplex = options.duplex && caps.supportsDuplex;
   final info = '${caps.model} | URF ${caps.defaultDpi} dpi ${color ? 'sRGB' : 'sGray'} | '
       '${duplex ? 'two-sided-long-edge' : 'one-sided'} | sheet-back ${caps.sheetBack.name}';
-  yield* printDocument(printer, TestPageSource(pageCount: duplex ? 2 : 1, color: color, info: info), options);
+  yield* printDocument(printer, TestPageSource(pageCount: duplex ? 2 : 1, color: color, info: info), options,
+      cancel: cancel);
 }
 
 /// Повний конвеєр: рендер кожної сторінки → складання аркуша й URF (в ізоляті) → Print-Job → стеження.
@@ -63,7 +80,9 @@ Stream<PrintProgress> printDocument(
   PrintOptions options, {
   List<int>? pages,
   LayoutOptions layout = const LayoutOptions(),
+  PrintCancel? cancel,
 }) async* {
+  cancel ??= PrintCancel();
   final caps = printer.capabilities;
   if (caps == null) {
     yield const PrintProgress(PrintStage.failed, 'Можливості принтера ще не відомі');
@@ -93,6 +112,10 @@ Stream<PrintProgress> printDocument(
   final encoded = <Uint8List>[];
   try {
     for (var i = 0; i < selected.length; i++) {
+      if (cancel.isCancelled) {
+        yield _cancelledBeforeSend;
+        return;
+      }
       yield PrintProgress(
         PrintStage.rendering,
         'Готую сторінку ${i + 1} з ${selected.length}…',
@@ -128,6 +151,10 @@ Stream<PrintProgress> printDocument(
   }
   final document = doc.takeBytes();
 
+  if (cancel.isCancelled) {
+    yield _cancelledBeforeSend;
+    return;
+  }
   yield PrintProgress(PrintStage.sending, 'Надсилаю ${(document.length / 1e6).toStringAsFixed(1)} МБ…');
   final client = printer.client();
   int? jobId;
@@ -164,10 +191,16 @@ Stream<PrintProgress> printDocument(
 
   // Стежимо за завданням, поки принтер не скаже «готово».
   final sentAt = DateTime.now();
+  final cancelled = cancel.whenCancelled.then((_) => true);
   final deadline = sentAt.add(const Duration(minutes: 5));
   DateTime? silentSince; // коли принтер перестав відповідати
   String? last;
   while (DateTime.now().isBefore(deadline)) {
+    if (cancel.isCancelled) {
+      yield const PrintProgress(PrintStage.waiting, 'Скасовую…');
+      yield await _cancelJob(client, jobId);
+      return;
+    }
     IppResponse? r;
     try {
       r = await client.getJobAttributes(jobId);
@@ -180,7 +213,7 @@ Stream<PrintProgress> printDocument(
         if (DateTime.now().difference(silentSince) < const Duration(minutes: 2)) {
           if (last != _silentText) yield const PrintProgress(PrintStage.waiting, _silentText);
           last = _silentText;
-          await Future<void>.delayed(const Duration(seconds: 3));
+          await _pause(const Duration(seconds: 3), cancelled);
           continue;
         }
       }
@@ -208,12 +241,32 @@ Stream<PrintProgress> printDocument(
       yield PrintProgress(PrintStage.waiting, text);
       last = text;
     }
-    await Future<void>.delayed(const Duration(seconds: 2));
+    await _pause(const Duration(seconds: 2), cancelled);
   }
   yield const PrintProgress(PrintStage.done, 'Надіслано (принтер ще працює)');
 }
 
 const _silentText = 'Принтер не відповідає, чекаю…';
+
+/// Пауза між опитуваннями, що обривається натисканням «Скасувати».
+Future<void> _pause(Duration d, Future<bool> cancelled) => Future.any([Future<bool>.delayed(d, () => false), cancelled]);
+
+Future<PrintProgress> _cancelJob(IppClient client, int jobId) async {
+  try {
+    final r = await client.cancelJob(jobId, userName: _userName());
+    if (r.isSuccess) {
+      return const PrintProgress(PrintStage.cancelled, 'Завдання скасовано. Аркуш, що вже друкувався, може вийти');
+    }
+    // 0x0507 — job-not-cancelable: принтер уже все зробив або завдання вже скасоване.
+    if (r.status == 0x0507) {
+      return const PrintProgress(PrintStage.failed, 'Запізно — принтер уже завершив це завдання');
+    }
+    final msg = r.first<String>('status-message');
+    return PrintProgress(PrintStage.failed, 'Принтер не скасував завдання (${r.statusHex}${msg != null ? ', $msg' : ''})');
+  } catch (e) {
+    return PrintProgress(PrintStage.failed, 'Не вдалося скасувати: $e');
+  }
+}
 
 /// Чи перезавантажився принтер після [since]: його printer-up-time менший за час, що минув.
 Future<bool> _restartedSince(IppClient client, DateTime since) async {

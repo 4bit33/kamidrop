@@ -102,6 +102,13 @@ class IppClient {
     return send(b.build(document: document), timeout: const Duration(minutes: 3));
   }
 
+  Future<IppResponse> cancelJob(int jobId, {required String userName}) {
+    final b = IppRequestBuilder.standard(IppOp.cancelJob, printerUri, requestId: 4, version: version)
+      ..integer('job-id', jobId)
+      ..string(IppTag.name, 'requesting-user-name', userName);
+    return send(b.build());
+  }
+
   Future<IppResponse> getJobAttributes(int jobId) {
     final b = IppRequestBuilder.standard(IppOp.getJobAttributes, printerUri, requestId: 3, version: version)
       ..integer('job-id', jobId)
