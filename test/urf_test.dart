@@ -43,6 +43,23 @@ void main() {
     expect(decodeUrf(data).single.pixels, page.pixels);
   });
 
+  test('URF: літеральні серії не довші за 64 пікселі', () {
+    // Сусідні пікселі завжди різні — рядок складається лише з літералів.
+    final px = Uint8List.fromList(List.generate(1000, (i) => i.isEven ? 10 : 200));
+    final page = UrfPage(width: 1000, height: 1, dpi: 300, color: false, pixels: px);
+    final data = encodeUrf([page]);
+    final body = data.sublist(12 + 32 + 1); // файл, сторінка, байт повтору рядка
+    var i = 0, longest = 0;
+    while (i < body.length) {
+      final c = body[i++];
+      final n = c > 128 ? 257 - c : 1;
+      longest = max(longest, n);
+      i += c > 128 ? n : 1;
+    }
+    expect(longest, 64);
+    expect(decodeUrf(data).single.pixels, px);
+  });
+
   test('Зворотний бік: rotated повертає на 180°', () {
     final page = UrfPage(width: 2, height: 2, dpi: 300, color: false, pixels: Uint8List.fromList([1, 2, 3, 4]));
     expect(page.forBackSide(SheetBack.rotated, tumble: false).pixels, [4, 3, 2, 1]);

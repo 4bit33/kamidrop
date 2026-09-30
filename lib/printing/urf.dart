@@ -133,6 +133,11 @@ bool _rowEq(Uint8List p, int a, int b, int stride) {
   return true;
 }
 
+/// Найдовша літеральна серія. Формат дозволяє 128 (так робить і CUPS), але Xerox WorkCentre 3225
+/// (прошивка SPL 5.90) одного разу видав «URFPWG Decoding Fail» на фото — страхуємося коротшими
+/// серіями. Коштує ~1–2 % розміру файлу.
+const _maxLiteral = 64;
+
 void _encodeRow(Uint8List px, int start, int width, int bpp, _Out out) {
   var x = 0;
   while (x < width) {
@@ -149,7 +154,7 @@ void _encodeRow(Uint8List px, int start, int width, int bpp, _Out out) {
     }
     // літерали: до початку наступної серії
     var lit = 1;
-    while (x + lit < width && lit < 128) {
+    while (x + lit < width && lit < _maxLiteral) {
       if (x + lit + 1 < width && _pixelEq(px, start + (x + lit) * bpp, start + (x + lit + 1) * bpp, bpp)) break;
       lit++;
     }
