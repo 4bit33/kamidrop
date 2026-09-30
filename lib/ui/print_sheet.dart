@@ -7,11 +7,13 @@ import 'package:flutter/material.dart';
 
 import '../discovery/discovery.dart';
 import '../platform/platform_bridge.dart';
+import '../printing/collage.dart';
 import '../printing/compose.dart';
 import '../printing/print_service.dart';
 import '../printing/sources.dart';
 import '../settings.dart';
 import '../theme.dart';
+import 'collage_editor.dart';
 import 'layout_editor.dart';
 
 Future<void> showPrintSheet(
@@ -54,6 +56,7 @@ class _PrintSheetState extends State<PrintSheet> {
 
   PrintSource? _source;
   final Map<int, ui.Image> _previews = {};
+  List<ui.Image> _thumbs = []; // превʼю окремих фото колажу (для редактора)
   int _previewIndex = 0;
   LayoutOptions _layout = const LayoutOptions();
   bool _opening = false;
@@ -83,6 +86,7 @@ class _PrintSheetState extends State<PrintSheet> {
     _sub?.cancel();
     _source?.dispose();
     _disposePreviews();
+    _disposeThumbs();
     _pagesController.dispose();
     super.dispose();
   }
@@ -118,28 +122,117 @@ class _PrintSheetState extends State<PrintSheet> {
     );
     if (fromGallery == null) return;
     if (fromGallery) {
-      final String? path;
+      final List<String> paths;
       try {
-        path = await PlatformBridge.pickImage();
+        paths = await PlatformBridge.pickImages();
       } catch (e) {
         if (mounted) setState(() => _openError = 'Не вдалося взяти фото з галереї: $e');
         return;
       }
-      if (path != null) await _open(path);
+      await _openPaths(paths);
     } else {
       await _pickFile();
     }
   }
 
   Future<void> _pickFile() async {
-    final file = await openFile(acceptedTypeGroups: const [
+    final files = await openFiles(acceptedTypeGroups: const [
       XTypeGroup(
         label: 'PDF і зображення',
         extensions: PrintSource.allExtensions,
         mimeTypes: ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp'],
       ),
     ]);
-    if (file != null) await _open(file.path);
+    await _openPaths([for (final f in files) f.path]);
+  }
+
+  /// Одне — відкриваємо як є; кілька зображень — розкладаємо на аркуші й даємо відредагувати.
+  Future<void> _openPaths(List<String> paths) async {
+    if (paths.isEmpty) return;
+    final images = paths.where((p) => PrintSource.imageExtensions.contains(p.split('.').last.toLowerCase()));
+    if (paths.length > 1 && images.length == paths.length) return _openCollage(paths);
+    await _open(paths.first);
+  }
+
+  Future<void> _openCollage(List<String> paths) async {
+    setState(() {
+      _opening = true;
+      _openError = null;
+      _progress = null;
+    });
+    try {
+      final photos = [for (final p in paths) await ImageSource.open(p)];
+      final thumbs = [for (final ph in photos) await ph.preview(0, maxSide: 800)];
+      final collage = autoArrange([for (final ph in photos) (ph.pageSize(0).width, ph.pageSize(0).height)]);
+      if (!mounted) {
+        for (final t in thumbs) {
+          t.dispose();
+        }
+        return;
+      }
+      await _source?.dispose();
+      _disposePreviews();
+      _disposeThumbs();
+      setState(() {
+        _source = CollageSource(photos, collage);
+        _thumbs = thumbs;
+        _pagesController.clear();
+      });
+      await _editCollage();
+    } catch (e) {
+      if (mounted) setState(() => _openError = '$e');
+    } finally {
+      if (mounted) setState(() => _opening = false);
+    }
+  }
+
+  Future<void> _editCollage() async {
+    final source = _source;
+    if (source is! CollageSource) return;
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => CollageEditorScreen(
+        source: source,
+        thumbs: _thumbs,
+        printerMargins: widget.printer.capabilities?.margins ?? SheetMargins.zero,
+        onAddPhotos: _pickMorePhotos,
+      ),
+    ));
+    source.collage.removeEmptySheets();
+    _disposePreviews();
+    final preview = await source.preview(0);
+    if (!mounted || _source != source) {
+      preview.dispose();
+      return;
+    }
+    setState(() {
+      _previews[0] = preview;
+      _previewIndex = 0;
+    });
+  }
+
+  /// Для кнопки «Додати фото» в редакторі.
+  Future<List<(ImageSource, ui.Image)>> _pickMorePhotos() async {
+    final List<String> paths;
+    if (Platform.isAndroid) {
+      paths = await PlatformBridge.pickImages();
+    } else {
+      final files = await openFiles(acceptedTypeGroups: const [
+        XTypeGroup(label: 'Зображення', extensions: PrintSource.imageExtensions),
+      ]);
+      paths = [for (final f in files) f.path];
+    }
+    return [
+      for (final p in paths)
+        if (PrintSource.imageExtensions.contains(p.split('.').last.toLowerCase()))
+          await ImageSource.open(p).then((ph) async => (ph, await ph.preview(0, maxSide: 800))),
+    ];
+  }
+
+  void _disposeThumbs() {
+    for (final t in _thumbs) {
+      t.dispose();
+    }
+    _thumbs = [];
   }
 
   Future<void> _open(String path) async {
@@ -158,6 +251,7 @@ class _PrintSheetState extends State<PrintSheet> {
       }
       await _source?.dispose();
       _disposePreviews();
+      _disposeThumbs();
       setState(() {
         _source = source;
         _previews[0] = preview;
@@ -216,7 +310,7 @@ class _PrintSheetState extends State<PrintSheet> {
       printerId: widget.printer.id,
       prefs: PrinterPrefs(color: _color ?? o.color, duplex: _duplex),
       document: _source?.isDocument ?? true,
-      layout: withLayout && _source != null ? _layout : null,
+      layout: withLayout && _source != null && _source is! CollageSource ? _layout : null,
     );
     final document = _source?.isDocument ?? true;
     if (withLayout && widget.settings.shouldHintLayout(document: document)) {
@@ -288,7 +382,17 @@ class _PrintSheetState extends State<PrintSheet> {
                   error: _openError,
                   onPick: _busy ? null : _pick,
                 ),
-                if (source != null) ...[
+                if (source is CollageSource) ...[
+                  const SizedBox(height: 16),
+                  _CollageCard(
+                    source: source,
+                    image: _previews[_previewIndex],
+                    index: _previewIndex,
+                    printerMargins: caps.margins,
+                    onIndexChanged: _showPage,
+                    onEdit: _busy ? null : _editCollage,
+                  ),
+                ] else if (source != null) ...[
                   const SizedBox(height: 16),
                   LayoutEditor(
                     source: source,
@@ -355,7 +459,8 @@ class _PrintSheetState extends State<PrintSheet> {
                       ? null
                       : () {
                           _remember();
-                          _start((c) => printDocument(p, source, _options(), pages: pages, layout: _layout, cancel: c));
+                          final layout = source is CollageSource ? CollageSource.layout : _layout;
+                          _start((c) => printDocument(p, source, _options(), pages: pages, layout: layout, cancel: c));
                         },
                   icon: const Icon(Icons.print),
                   label: Text(source == null
@@ -555,6 +660,65 @@ class _LayoutHint extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Колаж в аркуші друку: превʼю аркушів 1:1 і кнопка назад у редактор.
+class _CollageCard extends StatelessWidget {
+  const _CollageCard({
+    required this.source,
+    required this.image,
+    required this.index,
+    required this.printerMargins,
+    required this.onIndexChanged,
+    required this.onEdit,
+  });
+
+  final CollageSource source;
+  final ui.Image? image;
+  final int index;
+  final SheetMargins printerMargins;
+  final ValueChanged<int> onIndexChanged;
+  final VoidCallback? onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = Theme.of(context).textTheme.bodySmall;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: 260,
+          child: SheetPreview(
+            size: source.pageSize(index),
+            image: image,
+            layout: CollageSource.layout,
+            printerMargins: printerMargins,
+          ),
+        ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (source.pageCount > 1) ...[
+              IconButton(
+                onPressed: index > 0 ? () => onIndexChanged(index - 1) : null,
+                icon: const Icon(Icons.chevron_left),
+              ),
+              Text('Аркуш ${index + 1} з ${source.pageCount}', style: label),
+              IconButton(
+                onPressed: index < source.pageCount - 1 ? () => onIndexChanged(index + 1) : null,
+                icon: const Icon(Icons.chevron_right),
+              ),
+            ],
+            TextButton.icon(
+              onPressed: onEdit,
+              icon: const Icon(Icons.edit_outlined, size: 18),
+              label: const Text('Редагувати аркуші'),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

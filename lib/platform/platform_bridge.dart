@@ -78,10 +78,11 @@ class PlatformBridge {
     }
   }
 
-  /// Вибір фото системним Photo Picker. Шлях до копії в кеші або null, якщо нічого не вибрали.
-  static Future<String?> pickImage() async {
-    if (!_isAndroid) return null;
-    return _channel.invokeMethod<String>('pickImage');
+  /// Вибір одного чи кількох фото системним Photo Picker. Шляхи до копій у кеші; порожньо — нічого не вибрали.
+  static Future<List<String>> pickImages() async {
+    if (!_isAndroid) return const [];
+    final paths = await _channel.invokeListMethod<String>('pickImages');
+    return paths ?? const [];
   }
 
   /// Файли, надіслані, коли застосунок уже відкритий.

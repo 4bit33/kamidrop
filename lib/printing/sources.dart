@@ -2,11 +2,13 @@
 // сторінку, вписану в аркуш A4 з потрібною роздільністю.
 import 'dart:async';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:pdfrx/pdfrx.dart';
 
+import 'collage.dart';
 import 'compose.dart';
 import 'test_page.dart';
 
@@ -200,3 +202,55 @@ class TestPageSource extends PrintSource {
     return SourcePixels(data: r.rgba, width: r.width, height: r.height, order: PixelOrder.rgba, premultiplied: true);
   }
 }
+
+/// Кілька фото на аркушах (колаж). Кожен аркуш — A4 у натуральну величину, тож фото на папері
+/// мають рівно ті розміри в мм, що в редакторі.
+class CollageSource extends PrintSource {
+  CollageSource(this.photos, this.collage);
+
+  final List<ImageSource> photos;
+  final Collage collage;
+
+  @override
+  String get name => 'Аркуш із ${_photosLabel(collage.sheets.fold(0, (n, s) => n + s.length))}';
+
+  @override
+  int get pageCount => collage.sheets.length;
+
+  @override
+  bool get isDocument => false;
+
+  @override
+  ContentSize pageSize(int index) => const ContentSize(a4WidthMm, a4HeightMm, widthMm: a4WidthMm, heightMm: a4HeightMm);
+
+  /// Колаж друкується 1:1 на книжковому аркуші; поля принтера просто обрізають край.
+  static const layout = LayoutOptions(orientation: LayoutOrientation.portrait, scale: LayoutScale.actual);
+
+  @override
+  Future<SourcePixels> render(int index, {required int width, required int height}) async {
+    final k = width / a4WidthMm; // пікселів на мм
+    final placed = <PlacedPhoto>[];
+    for (final item in collage.sheets[index]) {
+      final (cx, cy, cw, ch) = contentRect(item, collage.aspectOf(item), scale: k);
+      final w = cw.round(), h = ch.round();
+      if (w < 1 || h < 1) continue;
+      // Рендеримо в неповернутій орієнтації фото; повертає вже composeCollageSheet.
+      final px = await photos[item.photo]
+          .render(0, width: item.quarterTurns.isOdd ? h : w, height: item.quarterTurns.isOdd ? w : h);
+      placed.add(PlacedPhoto(
+        pixels: px,
+        quarterTurns: item.quarterTurns,
+        frame: ((item.x * k).round(), (item.y * k).round(), (item.right * k).round(), (item.bottom * k).round()),
+        content: (cx.round(), cy.round(), cx.round() + w, cy.round() + h),
+      ));
+    }
+    final data = await _composeCollageInIsolate(width, height, placed);
+    return SourcePixels(data: data, width: width, height: height, order: PixelOrder.rgba);
+  }
+}
+
+String _photosLabel(int n) => '$n фото'; // «фото» не відмінюється
+
+// Top-level, щоб замикання для Isolate.run не захоплювало зайвого.
+Future<Uint8List> _composeCollageInIsolate(int width, int height, List<PlacedPhoto> placed) =>
+    Isolate.run(() => composeCollageSheet(width, height, placed));

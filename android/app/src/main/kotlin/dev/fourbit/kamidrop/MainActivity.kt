@@ -26,7 +26,7 @@ import java.util.Locale
  *    застосункам надсилати mDNS-запити самотужки, а NsdManager робить це від імені системи;
  *  - multicast lock (запасний варіант для Dart-реалізації mDNS);
  *  - прийом файлів через «Поділитися → KamiDrop» і «Відкрити за допомогою»;
- *  - вибір фото з галереї (системний Photo Picker).
+ *  - вибір фото з галереї (системний Photo Picker, одне або кілька).
  */
 class MainActivity : FlutterActivity() {
     private var channel: MethodChannel? = null
@@ -66,7 +66,7 @@ class MainActivity : FlutterActivity() {
                         result.success(pendingSharedPath)
                         pendingSharedPath = null
                     }
-                    "pickImage" -> pickImage(result)
+                    "pickImages" -> pickImages(result)
                     else -> result.notImplemented()
                 }
             }
@@ -86,13 +86,19 @@ class MainActivity : FlutterActivity() {
         if (requestCode != REQUEST_PICK_IMAGE) return
         val result = pendingPick ?: return
         pendingPick = null
-        val uri = if (resultCode == RESULT_OK) data?.data else null
-        if (uri == null) {
-            result.success(null)
-            return
+        val uris = mutableListOf<Uri>()
+        if (resultCode == RESULT_OK && data != null) {
+            val clip = data.clipData
+            if (clip != null) {
+                for (i in 0 until clip.itemCount) uris.add(clip.getItemAt(i).uri)
+            } else {
+                data.data?.let { uris.add(it) }
+            }
         }
         try {
-            result.success(copyToCache(uri, "picked"))
+            // Тека — лише під цей вибір: старі фото стираємо один раз, а не перед кожним.
+            val dir = freshDir("picked")
+            result.success(uris.map { copyToCache(it, dir) })
         } catch (e: Exception) {
             result.error("pick", e.message, null)
         }
@@ -252,14 +258,16 @@ class MainActivity : FlutterActivity() {
 
     // ------------------------------------------------------------------ фото з галереї
 
-    /** Android 13+ — системний Photo Picker (без дозволів); раніше — звичайний вибір зображення. */
-    private fun pickImage(result: MethodChannel.Result) {
-        pendingPick?.success(null) // попередній вибір так і не завершився
+    /** Android 13+ — системний Photo Picker (без дозволів); раніше — звичайний вибір зображень. */
+    private fun pickImages(result: MethodChannel.Result) {
+        pendingPick?.success(emptyList<String>()) // попередній вибір так і не завершився
         pendingPick = result
         val intent = if (Build.VERSION.SDK_INT >= 33) {
             Intent(MediaStore.ACTION_PICK_IMAGES).setType("image/*")
+                .putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, minOf(MAX_PICK, MediaStore.getPickImagesMaxLimit()))
         } else {
             Intent(Intent.ACTION_GET_CONTENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE)
+                .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
         }
         @Suppress("DEPRECATION")
         startActivityForResult(intent, REQUEST_PICK_IMAGE)
@@ -282,14 +290,20 @@ class MainActivity : FlutterActivity() {
         }
         if (uri == null) return null
         return try {
-            copyToCache(uri)
+            copyToCache(uri, freshDir("shared"))
         } catch (e: Exception) {
             null
         }
     }
 
-    /** Копіює вміст [uri] у cache/[dirName], тримаючи там лише останній файл. */
-    private fun copyToCache(uri: Uri, dirName: String = "shared"): String {
+    /** Порожня тека в кеші: там лежать лише файли останнього отримання. */
+    private fun freshDir(name: String): File = File(cacheDir, name).apply {
+        mkdirs()
+        listFiles()?.forEach { it.delete() }
+    }
+
+    /** Копіює вміст [uri] у [dir] під зрозумілою унікальною назвою. */
+    private fun copyToCache(uri: Uri, dir: File): String {
         var name: String? = null
         var dateTaken: Long? = null
         if (uri.scheme == "content") {
@@ -323,11 +337,9 @@ class MainActivity : FlutterActivity() {
             base.all { it.isDigit() } -> "Фото.$ext"
             else -> "$base.$ext"
         }
-        val dir = File(cacheDir, dirName).apply {
-            mkdirs()
-            listFiles()?.forEach { it.delete() }
-        }
-        val out = File(dir, fileName)
+        var out = File(dir, fileName)
+        var n = 2
+        while (out.exists()) out = File(dir, "${fileName.substringBeforeLast('.')} ($n).$ext").also { n++ }
         contentResolver.openInputStream(uri)!!.use { input ->
             out.outputStream().use { output -> input.copyTo(output) }
         }
@@ -336,5 +348,6 @@ class MainActivity : FlutterActivity() {
 
     companion object {
         private const val REQUEST_PICK_IMAGE = 4201
+        private const val MAX_PICK = 20
     }
 }
