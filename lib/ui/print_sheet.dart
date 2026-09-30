@@ -10,26 +10,35 @@ import '../discovery/discovery.dart';
 import '../printing/compose.dart';
 import '../printing/print_service.dart';
 import '../printing/sources.dart';
+import '../settings.dart';
 import '../theme.dart';
 import 'layout_editor.dart';
 
 Future<void> showPrintSheet(
   BuildContext context,
   PrinterDiscovery discovery,
+  KamiSettings settings,
   DiscoveredPrinter printer, {
   String? initialPath,
 }) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    builder: (_) => PrintSheet(discovery: discovery, printer: printer, initialPath: initialPath),
+    builder: (_) => PrintSheet(discovery: discovery, settings: settings, printer: printer, initialPath: initialPath),
   );
 }
 
 class PrintSheet extends StatefulWidget {
-  const PrintSheet({super.key, required this.discovery, required this.printer, this.initialPath});
+  const PrintSheet({
+    super.key,
+    required this.discovery,
+    required this.settings,
+    required this.printer,
+    this.initialPath,
+  });
 
   final PrinterDiscovery discovery;
+  final KamiSettings settings;
   final DiscoveredPrinter printer;
   final String? initialPath;
 
@@ -49,6 +58,7 @@ class _PrintSheetState extends State<PrintSheet> {
   LayoutOptions _layout = const LayoutOptions();
   bool _opening = false;
   String? _openError;
+  bool _layoutHint = false; // «запам'ятовувати макет?» після повторного однакового макета
 
   PrintProgress? _progress;
   StreamSubscription<PrintProgress>? _sub;
@@ -58,6 +68,11 @@ class _PrintSheetState extends State<PrintSheet> {
   @override
   void initState() {
     super.initState();
+    final prefs = widget.settings.printers[widget.printer.id];
+    if (prefs != null) {
+      _color = prefs.color;
+      _duplex = prefs.duplex;
+    }
     final path = widget.initialPath;
     if (path != null) _open(path);
   }
@@ -140,8 +155,7 @@ class _PrintSheetState extends State<PrintSheet> {
         _source = source;
         _previews[0] = preview;
         _previewIndex = 0;
-        // Документи мають власні поля; фото без полів обріжеться краєм принтера.
-        _layout = source.isDocument ? const LayoutOptions() : const LayoutOptions(marginMm: 5);
+        _layout = widget.settings.layoutFor(document: source.isDocument);
         _pagesController.clear();
       });
     } catch (e) {
@@ -184,6 +198,31 @@ class _PrintSheetState extends State<PrintSheet> {
     _sub = stream.listen((p) {
       if (mounted) setState(() => _progress = p);
     });
+  }
+
+  /// Запам'ятовує принтер і налаштування, з якими щойно почали друк.
+  void _remember({bool withLayout = true}) {
+    final o = _options();
+    widget.settings.remember(
+      printerId: widget.printer.id,
+      prefs: PrinterPrefs(color: _color ?? o.color, duplex: _duplex),
+      document: _source?.isDocument ?? true,
+      layout: withLayout && _source != null ? _layout : null,
+    );
+    final document = _source?.isDocument ?? true;
+    if (withLayout && widget.settings.shouldHintLayout(document: document)) {
+      widget.settings.layoutHintShown = true;
+      widget.settings.save();
+      setState(() => _layoutHint = true);
+    }
+  }
+
+  void _answerLayoutHint(bool enable) {
+    if (enable) {
+      widget.settings.rememberLayout = true;
+      widget.settings.save();
+    }
+    setState(() => _layoutHint = false);
   }
 
   PrintOptions _options() {
@@ -304,7 +343,10 @@ class _PrintSheetState extends State<PrintSheet> {
                 FilledButton.icon(
                   onPressed: _busy || !caps.supportsUrf || source == null || pages == null
                       ? null
-                      : () => _start(printDocument(p, source, _options(), pages: pages, layout: _layout)),
+                      : () {
+                          _remember();
+                          _start(printDocument(p, source, _options(), pages: pages, layout: _layout));
+                        },
                   icon: const Icon(Icons.print),
                   label: Text(source == null
                       ? 'Спершу вибери файл'
@@ -312,12 +354,18 @@ class _PrintSheetState extends State<PrintSheet> {
                   style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
                 ),
                 TextButton(
-                  onPressed: _busy || !caps.supportsUrf ? null : () => _start(printTestPage(p, _options())),
+                  onPressed: _busy || !caps.supportsUrf
+                      ? null
+                      : () {
+                          _remember(withLayout: false);
+                          _start(printTestPage(p, _options()));
+                        },
                   style: TextButton.styleFrom(foregroundColor: Kami.stone),
                   child: const Text('Тестова сторінка'),
                 ),
                 if (!caps.supportsUrf)
                   Text('Принтер не підтримує AirPrint-растр', style: theme.textTheme.bodySmall),
+                if (_layoutHint) _LayoutHint(onAnswer: _answerLayoutHint),
                 if (_progress != null) ...[
                   const SizedBox(height: 8),
                   _ProgressView(progress: _progress!),
@@ -440,6 +488,50 @@ class _ProgressView extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+/// Ненав'язлива підказка: людина вдруге вручну виставила той самий макет.
+class _LayoutHint extends StatelessWidget {
+  const _LayoutHint({required this.onAnswer});
+
+  final ValueChanged<bool> onAnswer;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.fromLTRB(14, 10, 6, 6),
+      decoration: BoxDecoration(
+        color: Kami.shu.withValues(alpha: 0.06),
+        border: Border.all(color: Kami.shu.withValues(alpha: 0.3)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Ти вже вдруге ставиш той самий макет. Запам\'ятовувати його, щоб наступного разу '
+              'він був одразу? Це можна змінити в налаштуваннях.',
+              style: theme.textTheme.bodySmall),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: () => onAnswer(false),
+                style: TextButton.styleFrom(foregroundColor: Kami.stone),
+                child: const Text('Ні'),
+              ),
+              TextButton(
+                onPressed: () => onAnswer(true),
+                style: TextButton.styleFrom(foregroundColor: Kami.shu),
+                child: const Text('Увімкнути'),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

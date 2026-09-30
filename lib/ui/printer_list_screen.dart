@@ -2,14 +2,92 @@ import 'package:flutter/material.dart';
 
 import '../discovery/discovery.dart';
 import '../printing/capabilities.dart';
+import '../settings.dart';
 import '../theme.dart';
 import 'print_sheet.dart';
+import 'settings_screen.dart';
 
-class PrinterListScreen extends StatelessWidget {
-  const PrinterListScreen({super.key, required this.discovery, required this.sharedFile});
+class PrinterListScreen extends StatefulWidget {
+  const PrinterListScreen({super.key, required this.discovery, required this.sharedFile, required this.settings});
 
   final PrinterDiscovery discovery;
   final ValueNotifier<String?> sharedFile;
+  final KamiSettings settings;
+
+  @override
+  State<PrinterListScreen> createState() => _PrinterListScreenState();
+}
+
+class _PrinterListScreenState extends State<PrinterListScreen> {
+  PrinterDiscovery get discovery => widget.discovery;
+  ValueNotifier<String?> get sharedFile => widget.sharedFile;
+
+  String? _autoOpenedFor; // файл, для якого аркуш друку вже відкривали самі
+  bool _sheetOpen = false;
+
+  @override
+  void initState() {
+    super.initState();
+    discovery.addListener(_maybeAutoOpen);
+    sharedFile.addListener(_maybeAutoOpen);
+  }
+
+  @override
+  void didUpdateWidget(PrinterListScreen old) {
+    super.didUpdateWidget(old);
+    if (old.settings != widget.settings) _maybeAutoOpen(); // налаштування довантажилися пізніше за файл
+  }
+
+  @override
+  void dispose() {
+    discovery.removeListener(_maybeAutoOpen);
+    sharedFile.removeListener(_maybeAutoOpen);
+    super.dispose();
+  }
+
+  /// Останній використаний принтер — першим.
+  List<DiscoveredPrinter> get _printers {
+    final list = discovery.printers;
+    if (!widget.settings.lastPrinterFirst) return list;
+    final last = widget.settings.lastPrinterId;
+    final i = list.indexWhere((p) => p.id == last);
+    if (i > 0) list.insert(0, list.removeAt(i));
+    return list;
+  }
+
+  /// Файл прийшов через «Поділитися»: якщо ясно, на чому друкувати (останній принтер на зв'язку
+  /// або він узагалі один), одразу відкриваємо аркуш друку.
+  void _maybeAutoOpen() {
+    final path = sharedFile.value;
+    if (!widget.settings.autoOpenShared) return;
+    if (path == null || path == _autoOpenedFor || _sheetOpen || !mounted) return;
+    final ready = discovery.printers.where((p) => p.capabilities != null).toList();
+    final last = ready.where((p) => p.id == widget.settings.lastPrinterId).firstOrNull;
+    final target = last ?? (ready.length == 1 && discovery.printers.length == 1 ? ready.single : null);
+    if (target == null) return;
+    _autoOpenedFor = path;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !_sheetOpen) _openSheet(target);
+    });
+  }
+
+  Future<void> _openSettings() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => SettingsScreen(settings: widget.settings)),
+    );
+    if (mounted) setState(() {});
+    _maybeAutoOpen();
+  }
+
+  Future<void> _openSheet(DiscoveredPrinter p) async {
+    _sheetOpen = true;
+    try {
+      await showPrintSheet(context, discovery, widget.settings, p, initialPath: sharedFile.value);
+    } finally {
+      _sheetOpen = false;
+    }
+    if (mounted) setState(() {}); // останній принтер міг змінитися
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -18,7 +96,7 @@ class PrinterListScreen extends StatelessWidget {
         child: ListenableBuilder(
           listenable: Listenable.merge([discovery, sharedFile]),
           builder: (context, _) {
-            final printers = discovery.printers;
+            final printers = _printers;
             final shared = sharedFile.value;
             return RefreshIndicator(
               color: Kami.shu,
@@ -27,7 +105,7 @@ class PrinterListScreen extends StatelessWidget {
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(20, 28, 20, 24),
                 children: [
-                  _Header(scanning: discovery.scanning, onRefresh: discovery.scan),
+                  _Header(scanning: discovery.scanning, onRefresh: discovery.scan, onSettings: _openSettings),
                   const SizedBox(height: 28),
                   if (shared != null) ...[
                     _SharedFileBanner(path: shared, onClose: () => sharedFile.value = null),
@@ -39,7 +117,10 @@ class PrinterListScreen extends StatelessWidget {
                       padding: const EdgeInsets.only(bottom: 12),
                       child: PrinterCard(
                         printer: p,
-                        onTap: () => showPrintSheet(context, discovery, p, initialPath: shared),
+                        isLast: widget.settings.lastPrinterFirst &&
+                            p.id == widget.settings.lastPrinterId &&
+                            printers.length > 1,
+                        onTap: () => _openSheet(p),
                       ),
                     ),
                   const SizedBox(height: 4),
@@ -106,10 +187,11 @@ class _AddPrinterDialogState extends State<_AddPrinterDialog> {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.scanning, required this.onRefresh});
+  const _Header({required this.scanning, required this.onRefresh, required this.onSettings});
 
   final bool scanning;
   final VoidCallback onRefresh;
+  final VoidCallback onSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -141,6 +223,11 @@ class _Header extends StatelessWidget {
           )
         else
           IconButton(onPressed: onRefresh, icon: const Icon(Icons.refresh, color: Kami.stone), tooltip: 'Шукати знову'),
+        IconButton(
+          onPressed: onSettings,
+          icon: const Icon(Icons.tune, color: Kami.stone),
+          tooltip: 'Налаштування',
+        ),
       ],
     );
   }
@@ -214,10 +301,11 @@ class _EmptyState extends StatelessWidget {
 }
 
 class PrinterCard extends StatelessWidget {
-  const PrinterCard({super.key, required this.printer, required this.onTap});
+  const PrinterCard({super.key, required this.printer, required this.onTap, this.isLast = false});
 
   final DiscoveredPrinter printer;
   final VoidCallback onTap;
+  final bool isLast; // останній використаний — позначаємо, якщо принтерів кілька
 
   @override
   Widget build(BuildContext context) {
@@ -237,6 +325,11 @@ class PrinterCard extends StatelessWidget {
                   StatusDot(printer: printer),
                   const SizedBox(width: 10),
                   Expanded(child: Text(printer.name, style: theme.textTheme.titleMedium, overflow: TextOverflow.ellipsis)),
+                  if (isLast)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: Text('останній', style: theme.textTheme.bodySmall?.copyWith(color: Kami.shu)),
+                    ),
                   const Icon(Icons.chevron_right, color: Kami.stone),
                 ],
               ),

@@ -3,6 +3,7 @@ import 'package:pdfrx/pdfrx.dart';
 
 import 'discovery/discovery.dart';
 import 'platform/platform_bridge.dart';
+import 'settings.dart';
 import 'theme.dart';
 import 'ui/printer_list_screen.dart';
 
@@ -28,10 +29,17 @@ class _KamiDropAppState extends State<KamiDropApp> {
   /// Файл, отриманий через «Поділитися → KamiDrop» (Android).
   final sharedFile = ValueNotifier<String?>(null);
 
+  KamiSettings settings = KamiSettings();
+
   @override
   void initState() {
     super.initState();
-    if (widget.startDiscovery) discovery.start();
+    if (widget.startDiscovery) {
+      discovery.start();
+      KamiSettings.load().then((s) {
+        if (mounted) setState(() => settings = s);
+      });
+    }
     PlatformBridge.takeSharedFile().then((path) {
       if (path != null) sharedFile.value = path;
     });
@@ -51,7 +59,7 @@ class _KamiDropAppState extends State<KamiDropApp> {
       title: 'KamiDrop',
       debugShowCheckedModeBanner: false,
       theme: kamiTheme(),
-      home: PrinterListScreen(discovery: discovery, sharedFile: sharedFile),
+      home: PrinterListScreen(discovery: discovery, sharedFile: sharedFile, settings: settings),
     );
   }
 }
