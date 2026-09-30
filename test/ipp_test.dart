@@ -77,4 +77,31 @@ void main() {
     final caps = PrinterCapabilities.fromIpp(IppResponse(0, {'printer-up-time': [1790711214]}));
     expect(caps.recentlyRestarted, isFalse, reason: 'CUPS шле Unix-час — це не «щойно»');
   });
+
+  test('Колекція media-col кодується і не збиває розбір', () {
+    final b = IppRequestBuilder(0x0000)
+      ..group(IppTag.jobAttributes)
+      ..collection('media-col', {
+        'media-size': {'x-dimension': 21000, 'y-dimension': 29700},
+        'media-top-margin': 0,
+      })
+      ..integer('copies', 2);
+    final data = b.build();
+    // begCollection 'media-col', memberAttrName 'media-size', вкладена begCollection ...
+    expect(data[9], IppTag.begCollection);
+    expect(String.fromCharCodes(data.sublist(12, 21)), 'media-col');
+    final r = parseIppResponse(data);
+    expect(r.first<int>('copies'), 2, reason: 'атрибут після колекції читається');
+  });
+
+  test('Друк до краю — лише коли поле 0 є для всіх чотирьох боків', () {
+    // У фейкового Brother 0 є лише для top і left.
+    expect(PrinterCapabilities.fromIpp(parseIppResponse(_fakeBrotherResponse())).supportsBorderless, isFalse);
+    final r = IppResponse(0, {
+      for (final e in ['top', 'bottom', 'left', 'right']) 'media-$e-margin-supported': [300, 0],
+    });
+    final caps = PrinterCapabilities.fromIpp(r);
+    expect(caps.supportsBorderless, isTrue);
+    expect(caps.margins.top, 3.0, reason: 'звичайні поля — найменші ненульові');
+  });
 }

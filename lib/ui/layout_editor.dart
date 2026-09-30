@@ -18,6 +18,7 @@ class LayoutEditor extends StatelessWidget {
     required this.onChanged,
     required this.onIndexChanged,
     this.printerMargins = SheetMargins.zero,
+    this.canBorderless = false,
     this.enabled = true,
   });
 
@@ -28,6 +29,7 @@ class LayoutEditor extends StatelessWidget {
   final ValueChanged<LayoutOptions> onChanged;
   final ValueChanged<int> onIndexChanged;
   final SheetMargins printerMargins;
+  final bool canBorderless; // принтер уміє друк «до краю»
   final bool enabled;
 
   @override
@@ -56,7 +58,12 @@ class LayoutEditor extends StatelessWidget {
         SizedBox(
           height: 260,
           child:
-              SheetPreview(size: source.pageSize(index), image: image, layout: layout, printerMargins: printerMargins),
+              SheetPreview(
+            size: source.pageSize(index),
+            image: image,
+            layout: layout,
+            printerMargins: effectiveMargins(layout, printerMargins, printerBorderless: canBorderless),
+          ),
         ),
         if (source.pageCount > 1)
           Row(
@@ -129,8 +136,12 @@ class LayoutEditor extends StatelessWidget {
         Wrap(
           spacing: 6,
           children: [
-            for (final (mm, text) in const [(0.0, 'Без полів'), (5.0, '5 мм'), (10.0, '10 мм')])
-              chip(text, layout.marginMm == mm, () => set(layout.copyWith(marginMm: mm))),
+            if (canBorderless)
+              chip('До краю', layout.borderless, () => set(layout.copyWith(marginMm: 0, borderless: true))),
+            // «Мінімальні» — впритул до полів, які принтер не друкує.
+            for (final (mm, text) in const [(0.0, 'Мінімальні'), (5.0, '5 мм'), (10.0, '10 мм')])
+              chip(text, layout.marginMm == mm && !(layout.borderless && canBorderless),
+                  () => set(layout.copyWith(marginMm: mm, borderless: false))),
           ],
         ),
         if (photo != null || isCustom) ...[

@@ -37,6 +37,7 @@ class _FakePrinter {
 
   final int cancelStatus;
   final ops = <int>[];
+  final bodies = <Uint8List>[];
   late final HttpServer server;
 
   Future<void> start() async {
@@ -46,6 +47,7 @@ class _FakePrinter {
       final data = body.takeBytes();
       final op = data[2] << 8 | data[3];
       ops.add(op);
+      bodies.add(data);
       final status = op == IppOp.cancelJob ? cancelStatus : 0x0000;
       final b = IppRequestBuilder(status) // статус на місці operation-id
         ..group(IppTag.operationAttributes)
@@ -59,7 +61,7 @@ class _FakePrinter {
     });
   }
 
-  DiscoveredPrinter printer() => DiscoveredPrinter(
+  DiscoveredPrinter printer({bool borderless = false}) => DiscoveredPrinter(
         id: 'fake',
         name: 'Fake',
         host: '127.0.0.1',
@@ -68,7 +70,7 @@ class _FakePrinter {
         tls: false,
         txt: const {},
         lastSeen: DateTime.now(),
-      )..capabilities = const PrinterCapabilities(
+      )..capabilities = PrinterCapabilities(
           model: 'Fake',
           state: PrinterState.idle,
           stateMessage: null,
@@ -83,6 +85,7 @@ class _FakePrinter {
           maxCopies: 1,
           media: [],
           markers: [],
+          supportsBorderless: borderless,
         );
 }
 
@@ -123,5 +126,23 @@ void main() {
     expect(stages.last.stage, PrintStage.failed);
     expect(stages.last.message, contains('Запізно'));
     await fake.server.close(force: true);
+  });
+
+  test('«До краю»: media-col з нульовими полями замість media — лише якщо принтер уміє', () async {
+    for (final canBorderless in [true, false]) {
+      final fake = _FakePrinter();
+      await fake.start();
+      final cancel = PrintCancel();
+      await for (final p in printDocument(fake.printer(borderless: canBorderless), _BlankSource(1),
+          const PrintOptions(), layout: const LayoutOptions(borderless: true), cancel: cancel)) {
+        if (p.stage == PrintStage.waiting) cancel.cancel();
+      }
+      final job = fake.bodies.first;
+      final header = String.fromCharCodes(job.sublist(0, job.length.clamp(0, 600)));
+      expect(header.contains('media-col'), canBorderless);
+      expect(header.contains('media-top-margin'), canBorderless);
+      expect(header.contains('iso_a4_210x297mm'), !canBorderless);
+      await fake.server.close(force: true);
+    }
   });
 }

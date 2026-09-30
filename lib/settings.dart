@@ -152,6 +152,7 @@ Map<String, dynamic> layoutToJson(LayoutOptions o) => {
       'marginMm': o.marginMm,
       'anchor': o.anchor.name,
       'photoSize': o.photoSize?.label,
+      'borderless': o.borderless,
     };
 
 /// Невідомі значення (напр. зі старішої версії) тихо замінюються типовими.
@@ -167,5 +168,6 @@ LayoutOptions layoutFromJson(Map<String, dynamic> j) {
     marginMm: (j['marginMm'] as num?)?.toDouble() ?? d.marginMm,
     anchor: byName(LayoutAnchor.values, j['anchor'], d.anchor),
     photoSize: PhotoSize.all.where((p) => p.label == photoLabel).firstOrNull,
+    borderless: j['borderless'] as bool? ?? false,
   );
 }

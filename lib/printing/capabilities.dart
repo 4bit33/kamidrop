@@ -34,6 +34,7 @@ class PrinterCapabilities {
   final int maxCopies;
   final List<String> media;
   final SheetMargins margins; // куди принтер не друкує (без запиту «без полів»)
+  final bool supportsBorderless; // уміє поля 0 з усіх боків (друк «до краю»)
   final List<Marker> markers;
 
   const PrinterCapabilities({
@@ -52,6 +53,7 @@ class PrinterCapabilities {
     required this.maxCopies,
     required this.media,
     this.margins = SheetMargins.zero,
+    this.supportsBorderless = false,
     required this.markers,
   });
 
@@ -123,6 +125,9 @@ class PrinterCapabilities {
       return v.isEmpty ? 0 : v.reduce((a, b) => a < b ? a : b) / 100;
     }
 
+    final borderless = ['top', 'bottom', 'left', 'right']
+        .every((edge) => r.all<int>('media-$edge-margin-supported').contains(0));
+
     final sides = r.all<String>('sides-supported');
     final colorModes = r.all<String>('print-color-mode-supported');
 
@@ -142,6 +147,7 @@ class PrinterCapabilities {
       maxCopies: copiesRange?.upper ?? 1,
       media: r.all<String>('media-supported'),
       margins: SheetMargins(top: margin('top'), bottom: margin('bottom'), left: margin('left'), right: margin('right')),
+      supportsBorderless: borderless,
       markers: markers,
     );
   }

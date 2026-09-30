@@ -20,6 +20,7 @@ class IppTag {
   static const text = 0x41;
   static const name = 0x42;
   static const keyword = 0x44;
+  static const memberAttrName = 0x4A;
   static const uri = 0x45;
   static const charset = 0x47;
   static const naturalLanguage = 0x48;
@@ -85,6 +86,31 @@ class IppRequestBuilder {
   }
 
   void integer(String name, int value, {int tag = IppTag.integer}) => attr(tag, name, _u32(value));
+
+  /// Колекція (RFC 8010 §3.1.6), напр. media-col. Значення членів: int → integer,
+  /// String → keyword, Map → вкладена колекція.
+  void collection(String name, Map<String, Object> members) {
+    attr(IppTag.begCollection, name, const []);
+    _members(members);
+  }
+
+  void _members(Map<String, Object> members) {
+    members.forEach((member, value) {
+      attr(IppTag.memberAttrName, '', utf8.encode(member));
+      switch (value) {
+        case int v:
+          attr(IppTag.integer, '', _u32(v));
+        case String v:
+          attr(IppTag.keyword, '', utf8.encode(v));
+        case Map<String, Object> v:
+          attr(IppTag.begCollection, '', const []);
+          _members(v);
+        default:
+          throw ArgumentError('Непідтримуване значення в колекції: $member = $value');
+      }
+    });
+    attr(IppTag.endCollection, '', const []);
+  }
 
   Uint8List build({List<int>? document}) {
     _b.addByte(IppTag.end);

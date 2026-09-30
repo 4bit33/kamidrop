@@ -91,6 +91,7 @@ class IppClient {
     required String userName,
     Map<String, String> keywords = const {},
     Map<String, int> integers = const {},
+    Map<String, Map<String, Object>> collections = const {},
   }) {
     final b = IppRequestBuilder.standard(IppOp.printJob, printerUri, requestId: 2, version: version)
       ..string(IppTag.name, 'requesting-user-name', userName)
@@ -99,6 +100,7 @@ class IppClient {
       ..group(IppTag.jobAttributes);
     keywords.forEach((k, v) => b.string(IppTag.keyword, k, v));
     integers.forEach((k, v) => b.integer(k, v));
+    collections.forEach(b.collection);
     return send(b.build(document: document), timeout: const Duration(minutes: 3));
   }
 

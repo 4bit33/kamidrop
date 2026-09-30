@@ -103,6 +103,8 @@ Stream<PrintProgress> printDocument(
   final duplex = options.duplex && caps.supportsDuplex;
   final urfDuplex = duplex ? UrfDuplex.longEdge : UrfDuplex.none;
   final pageW = a4WidthPx(dpi), pageH = a4HeightPx(dpi);
+  final borderless = layout.borderless && caps.supportsBorderless;
+  final margins = effectiveMargins(layout, caps.margins, printerBorderless: caps.supportsBorderless);
 
   // Якщо принтер не вміє копії сам — повторюємо сторінки. При дуплексі з непарною кількістю
   // додаємо порожню, щоб кожна копія починалася з лицьового боку.
@@ -122,7 +124,7 @@ Stream<PrintProgress> printDocument(
         fraction: i / selected.length,
       );
       final lay = computeLayout(source.pageSize(selected[i]), layout,
-          pageW: pageW, pageH: pageH, dpi: dpi, printerMargins: caps.margins);
+          pageW: pageW, pageH: pageH, dpi: dpi, printerMargins: margins);
       final px = await source.render(selected[i], width: lay.renderW, height: lay.renderH);
       encoded.add(await _encodeInIsolate(
         px,
@@ -166,11 +168,22 @@ Stream<PrintProgress> printDocument(
       userName: _userName(),
       keywords: {
         'sides': duplex ? 'two-sided-long-edge' : 'one-sided',
-        'media': 'iso_a4_210x297mm',
+        if (!borderless) 'media': 'iso_a4_210x297mm',
         'print-color-mode': color ? 'color' : 'monochrome',
       },
       integers: {
         if (caps.printerHandlesCopies && options.copies > 1) 'copies': options.copies,
+      },
+      // «До краю»: A4 з нульовими полями — так само робить AirPrint.
+      collections: {
+        if (borderless)
+          'media-col': {
+            'media-size': {'x-dimension': 21000, 'y-dimension': 29700},
+            'media-top-margin': 0,
+            'media-bottom-margin': 0,
+            'media-left-margin': 0,
+            'media-right-margin': 0,
+          },
       },
     );
     if (!r.isSuccess) {

@@ -68,6 +68,7 @@ class LayoutOptions {
   final double marginMm;
   final LayoutAnchor anchor;
   final PhotoSize? photoSize; // якщо задано — фото кадрується точно під цей розмір
+  final bool borderless; // «до краю»: лише для принтерів, що вміють поля 0 (струменеві)
 
   const LayoutOptions({
     this.orientation = LayoutOrientation.auto,
@@ -76,6 +77,7 @@ class LayoutOptions {
     this.marginMm = 0,
     this.anchor = LayoutAnchor.center,
     this.photoSize,
+    this.borderless = false,
   });
 
   LayoutOptions copyWith({
@@ -86,6 +88,7 @@ class LayoutOptions {
     LayoutAnchor? anchor,
     PhotoSize? photoSize,
     bool clearPhotoSize = false,
+    bool? borderless,
   }) {
     return LayoutOptions(
       orientation: orientation ?? this.orientation,
@@ -94,9 +97,14 @@ class LayoutOptions {
       marginMm: marginMm ?? this.marginMm,
       anchor: anchor ?? this.anchor,
       photoSize: clearPhotoSize ? null : (photoSize ?? this.photoSize),
+      borderless: borderless ?? this.borderless,
     );
   }
 }
+
+/// Поля, з якими реально друкуємо: «до краю» прибирає поля принтера, якщо він це вміє.
+SheetMargins effectiveMargins(LayoutOptions o, SheetMargins printer, {required bool printerBorderless}) =>
+    o.borderless && printerBorderless ? SheetMargins.zero : printer;
 
 /// Результат розрахунку макета. Координати — у «полотні»: аркуш у вибраній орієнтації
 /// (для альбомної полотно має розмір pageH×pageW і потім повертається на аркуш).

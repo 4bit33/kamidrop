@@ -178,4 +178,12 @@ void main() {
     expect(l.clipX0, (10 * dpi / 25.4).round());
     expect(l.safeX0, (4.4 * dpi / 25.4).round());
   });
+
+  test('«До краю» прибирає поля лише на принтері, що це вміє', () {
+    const xerox = SheetMargins.all(4.4);
+    const o = LayoutOptions(borderless: true);
+    expect(effectiveMargins(o, xerox, printerBorderless: true).isZero, isTrue);
+    expect(effectiveMargins(o, xerox, printerBorderless: false).top, 4.4);
+    expect(effectiveMargins(const LayoutOptions(), xerox, printerBorderless: true).top, 4.4);
+  });
 }

@@ -296,6 +296,7 @@ class _PrintSheetState extends State<PrintSheet> {
                     index: _previewIndex,
                     layout: _layout,
                     printerMargins: caps.margins,
+                    canBorderless: caps.supportsBorderless,
                     enabled: !_busy,
                     onChanged: (l) => setState(() => _layout = l),
                     onIndexChanged: _showPage,
