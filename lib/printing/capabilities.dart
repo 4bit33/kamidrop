@@ -22,6 +22,7 @@ class PrinterCapabilities {
   final String model;
   final PrinterState state;
   final String? stateMessage;
+  final int? upTime; // printer-up-time, с від увімкнення (деякі принтери шлють Unix-час)
   final List<String> formats;
   final List<String> urf;
   final List<int> urfResolutions;
@@ -39,6 +40,7 @@ class PrinterCapabilities {
     required this.model,
     required this.state,
     required this.stateMessage,
+    this.upTime,
     required this.formats,
     required this.urf,
     required this.urfResolutions,
@@ -54,6 +56,9 @@ class PrinterCapabilities {
   });
 
   bool get supportsUrf => formats.contains('image/urf');
+
+  /// Принтер увімкнувся менш ніж 3 хв тому (Xerox перезавантажується сам, напр. на кольоровому скануванні).
+  bool get recentlyRestarted => upTime != null && upTime! < 180;
 
   /// Найменша підтримувана роздільність — достатньо для документів і найшвидше.
   int get defaultDpi => urfResolutions.isEmpty ? 300 : urfResolutions.reduce((a, b) => a < b ? a : b);
@@ -125,6 +130,7 @@ class PrinterCapabilities {
       model: r.first<String>('printer-make-and-model') ?? txt['ty'] ?? 'Невідомий принтер',
       state: state,
       stateMessage: r.first<String>('printer-state-message'),
+      upTime: r.first<int>('printer-up-time'),
       formats: r.all<String>('document-format-supported'),
       urf: urfList,
       urfResolutions: dpis.toList()..sort(),

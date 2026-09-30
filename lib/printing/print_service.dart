@@ -4,6 +4,8 @@ import 'dart:isolate';
 import 'dart:typed_data';
 
 import '../discovery/discovery.dart';
+import '../ipp/ipp.dart';
+import '../ipp/ipp_client.dart';
 import 'compose.dart';
 import 'sources.dart';
 import 'test_page.dart';
@@ -161,16 +163,38 @@ Stream<PrintProgress> printDocument(
   }
 
   // Стежимо за завданням, поки принтер не скаже «готово».
-  final deadline = DateTime.now().add(const Duration(minutes: 5));
+  final sentAt = DateTime.now();
+  final deadline = sentAt.add(const Duration(minutes: 5));
+  DateTime? silentSince; // коли принтер перестав відповідати
   String? last;
   while (DateTime.now().isBefore(deadline)) {
-    int? state;
+    IppResponse? r;
     try {
-      state = (await client.getJobAttributes(jobId)).first<int>('job-state');
-    } catch (_) {
-      yield const PrintProgress(PrintStage.done, 'Надіслано (статус завдання недоступний)');
+      r = await client.getJobAttributes(jobId);
+    } catch (_) {}
+    final state = r != null && r.isSuccess ? r.first<int>('job-state') : null;
+    if (state == null) {
+      // Мовчить або забув завдання — можливо, перезавантажився. Чекаємо до 2 хв, поки оживе.
+      if (r == null) {
+        silentSince ??= DateTime.now();
+        if (DateTime.now().difference(silentSince) < const Duration(minutes: 2)) {
+          if (last != _silentText) yield const PrintProgress(PrintStage.waiting, _silentText);
+          last = _silentText;
+          await Future<void>.delayed(const Duration(seconds: 3));
+          continue;
+        }
+      }
+      if (await _restartedSince(client, sentAt)) {
+        yield const PrintProgress(
+            PrintStage.failed, 'Принтер перезавантажився під час друку — завдання, найпевніше, втрачено');
+      } else if (r == null) {
+        yield const PrintProgress(PrintStage.done, 'Принтер перестав відповідати — перевір, чи надрукувалось');
+      } else {
+        yield const PrintProgress(PrintStage.done, 'Надіслано (статус завдання недоступний)');
+      }
       return;
     }
+    silentSince = null;
     final text = _jobStates[state] ?? 'Стан: $state';
     if (state == 9) {
       yield const PrintProgress(PrintStage.done, 'Готово');
@@ -187,6 +211,18 @@ Stream<PrintProgress> printDocument(
     await Future<void>.delayed(const Duration(seconds: 2));
   }
   yield const PrintProgress(PrintStage.done, 'Надіслано (принтер ще працює)');
+}
+
+const _silentText = 'Принтер не відповідає, чекаю…';
+
+/// Чи перезавантажився принтер після [since]: його printer-up-time менший за час, що минув.
+Future<bool> _restartedSince(IppClient client, DateTime since) async {
+  try {
+    final up = (await client.getPrinterAttributes()).first<int>('printer-up-time');
+    return up != null && up < DateTime.now().difference(since).inSeconds;
+  } catch (_) {
+    return false;
+  }
 }
 
 // Окремі top-level функції: замикання для Isolate.run не повинні захоплювати контекст async*-генератора.

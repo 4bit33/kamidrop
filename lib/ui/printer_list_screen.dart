@@ -247,6 +247,12 @@ class PrinterCard extends StatelessWidget {
                   style: theme.textTheme.bodySmall,
                 ),
               ),
+              if (caps != null && caps.recentlyRestarted)
+                Padding(
+                  padding: const EdgeInsets.only(left: 20, top: 4),
+                  child: Text('Щойно ввімкнувся — може ще прогріватися',
+                      style: theme.textTheme.bodySmall?.copyWith(color: Kami.kincha)),
+                ),
               if (printer.loading && caps == null)
                 const Padding(
                   padding: EdgeInsets.only(top: 12),

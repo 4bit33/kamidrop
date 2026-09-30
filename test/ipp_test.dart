@@ -32,7 +32,8 @@ Uint8List _fakeBrotherResponse() {
     ..integer('', 0)
     ..integer('', 1200)
     ..integer('media-left-margin-supported', 300)
-    ..integer('', 0);
+    ..integer('', 0)
+    ..integer('printer-up-time', 64);
   return b.build();
 }
 
@@ -69,5 +70,11 @@ void main() {
     expect(caps.margins.top, 3.0);
     expect(caps.margins.left, 3.0);
     expect(caps.margins.bottom, 0, reason: 'атрибута немає — поле невідоме');
+  });
+
+  test('printer-up-time: щойно ввімкнений принтер і Unix-час', () {
+    expect(PrinterCapabilities.fromIpp(parseIppResponse(_fakeBrotherResponse())).recentlyRestarted, isTrue);
+    final caps = PrinterCapabilities.fromIpp(IppResponse(0, {'printer-up-time': [1790711214]}));
+    expect(caps.recentlyRestarted, isFalse, reason: 'CUPS шле Unix-час — це не «щойно»');
   });
 }
