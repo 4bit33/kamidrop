@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// Міст до нативного коду Android (MainActivity.kt): системний пошук принтерів (NsdManager),
-/// multicast lock і файли з «Поділитися → KamiDrop». На інших платформах — нічого не робить.
+/// multicast lock, файли з «Поділитися → KamiDrop» і вибір фото. На інших платформах — нічого не робить.
 class PlatformBridge {
   static const _channel = MethodChannel('kamidrop/platform');
 
@@ -76,6 +76,12 @@ class PlatformBridge {
     } catch (_) {
       return null;
     }
+  }
+
+  /// Вибір фото системним Photo Picker. Шлях до копії в кеші або null, якщо нічого не вибрали.
+  static Future<String?> pickImage() async {
+    if (!_isAndroid) return null;
+    return _channel.invokeMethod<String>('pickImage');
   }
 
   /// Файли, надіслані, коли застосунок уже відкритий.

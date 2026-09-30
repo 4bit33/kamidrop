@@ -4,9 +4,9 @@ import 'dart:ui' as ui;
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart' as picker;
 
 import '../discovery/discovery.dart';
+import '../platform/platform_bridge.dart';
 import '../printing/compose.dart';
 import '../printing/print_service.dart';
 import '../printing/sources.dart';
@@ -117,8 +117,14 @@ class _PrintSheetState extends State<PrintSheet> {
     );
     if (fromGallery == null) return;
     if (fromGallery) {
-      final image = await picker.ImagePicker().pickImage(source: picker.ImageSource.gallery);
-      if (image != null) await _open(image.path);
+      final String? path;
+      try {
+        path = await PlatformBridge.pickImage();
+      } catch (e) {
+        if (mounted) setState(() => _openError = 'Не вдалося взяти фото з галереї: $e');
+        return;
+      }
+      if (path != null) await _open(path);
     } else {
       await _pickFile();
     }

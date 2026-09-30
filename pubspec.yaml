@@ -13,8 +13,6 @@ dependencies:
   file_selector: ^1.0.3
   pdfrx: ^2.6.0
   path_provider: ^2.1.5
-  image_picker: ^1.2.3
-
 dev_dependencies:
   flutter_test:
     sdk: flutter

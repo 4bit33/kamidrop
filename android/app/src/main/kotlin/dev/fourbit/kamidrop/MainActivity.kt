@@ -9,24 +9,30 @@ import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.provider.MediaStore
 import android.provider.OpenableColumns
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.net.Inet4Address
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Нативна частина KamiDrop:
  *  - пошук принтерів через системний NsdManager (DNS-SD). Android не дає звичайним
  *    застосункам надсилати mDNS-запити самотужки, а NsdManager робить це від імені системи;
  *  - multicast lock (запасний варіант для Dart-реалізації mDNS);
- *  - прийом файлів через «Поділитися → KamiDrop» і «Відкрити за допомогою».
+ *  - прийом файлів через «Поділитися → KamiDrop» і «Відкрити за допомогою»;
+ *  - вибір фото з галереї (системний Photo Picker).
  */
 class MainActivity : FlutterActivity() {
     private var channel: MethodChannel? = null
     private var multicastLock: WifiManager.MulticastLock? = null
     private var pendingSharedPath: String? = null
+    private var pendingPick: MethodChannel.Result? = null
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private var nsd: NsdManager? = null
@@ -60,6 +66,7 @@ class MainActivity : FlutterActivity() {
                         result.success(pendingSharedPath)
                         pendingSharedPath = null
                     }
+                    "pickImage" -> pickImage(result)
                     else -> result.notImplemented()
                 }
             }
@@ -71,6 +78,24 @@ class MainActivity : FlutterActivity() {
         setIntent(intent)
         val path = extractSharedFile(intent) ?: return
         channel?.invokeMethod("sharedFile", path)
+    }
+
+    @Deprecated("startActivityForResult — найпростіше для FlutterActivity")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQUEST_PICK_IMAGE) return
+        val result = pendingPick ?: return
+        pendingPick = null
+        val uri = if (resultCode == RESULT_OK) data?.data else null
+        if (uri == null) {
+            result.success(null)
+            return
+        }
+        try {
+            result.success(copyToCache(uri, "picked"))
+        } catch (e: Exception) {
+            result.error("pick", e.message, null)
+        }
     }
 
     override fun onDestroy() {
@@ -225,6 +250,21 @@ class MainActivity : FlutterActivity() {
         multicastLock = null
     }
 
+    // ------------------------------------------------------------------ фото з галереї
+
+    /** Android 13+ — системний Photo Picker (без дозволів); раніше — звичайний вибір зображення. */
+    private fun pickImage(result: MethodChannel.Result) {
+        pendingPick?.success(null) // попередній вибір так і не завершився
+        pendingPick = result
+        val intent = if (Build.VERSION.SDK_INT >= 33) {
+            Intent(MediaStore.ACTION_PICK_IMAGES).setType("image/*")
+        } else {
+            Intent(Intent.ACTION_GET_CONTENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE)
+        }
+        @Suppress("DEPRECATION")
+        startActivityForResult(intent, REQUEST_PICK_IMAGE)
+    }
+
     // ------------------------------------------------------------------ файли з «Поділитися»
 
     private fun extractSharedFile(intent: Intent?): String? {
@@ -248,28 +288,42 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun copyToCache(uri: Uri): String {
+    /** Копіює вміст [uri] у cache/[dirName], тримаючи там лише останній файл. */
+    private fun copyToCache(uri: Uri, dirName: String = "shared"): String {
         var name: String? = null
+        var dateTaken: Long? = null
         if (uri.scheme == "content") {
             contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
                 if (c.moveToFirst()) name = c.getString(0)
             }
+            // Photo Picker ховає справжню назву («1000029278.jpg»), але віддає дату зйомки.
+            try {
+                contentResolver.query(uri, arrayOf(MediaStore.MediaColumns.DATE_TAKEN), null, null, null)?.use { c ->
+                    if (c.moveToFirst() && !c.isNull(0)) dateTaken = c.getLong(0)
+                }
+            } catch (_: Exception) {}
         }
         if (name.isNullOrBlank()) name = uri.lastPathSegment ?: "shared"
         var fileName = name!!.substringAfterLast('/')
-        if (!fileName.contains('.')) {
+        val ext = fileName.substringAfterLast('.', "").ifEmpty {
             val mime = contentResolver.getType(uri) ?: ""
-            val ext = when {
+            when {
                 mime == "application/pdf" -> "pdf"
                 mime == "image/png" -> "png"
                 mime == "image/webp" -> "webp"
                 mime.startsWith("image/") -> "jpg"
                 else -> "bin"
             }
-            fileName = "$fileName.$ext"
         }
-        // Тримаємо в кеші лише останній отриманий файл.
-        val dir = File(cacheDir, "shared").apply {
+        val base = fileName.substringBeforeLast('.')
+        val taken = dateTaken
+        fileName = when {
+            base.all { it.isDigit() } && taken != null && taken > 0 ->
+                "Фото ${SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.ROOT).format(Date(taken))}.$ext"
+            base.all { it.isDigit() } -> "Фото.$ext"
+            else -> "$base.$ext"
+        }
+        val dir = File(cacheDir, dirName).apply {
             mkdirs()
             listFiles()?.forEach { it.delete() }
         }
@@ -278,5 +332,9 @@ class MainActivity : FlutterActivity() {
             out.outputStream().use { output -> input.copyTo(output) }
         }
         return out.absolutePath
+    }
+
+    companion object {
+        private const val REQUEST_PICK_IMAGE = 4201
     }
 }
