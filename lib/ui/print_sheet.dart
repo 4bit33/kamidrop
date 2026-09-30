@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart' as picker;
 
 import '../discovery/discovery.dart';
 import '../printing/compose.dart';
@@ -67,6 +69,44 @@ class _PrintSheetState extends State<PrintSheet> {
     _disposePreviews();
     _pagesController.dispose();
     super.dispose();
+  }
+
+  /// На Android питаємо, звідки брати: галерея (системний Photo Picker) чи файли. На ПК — одразу файли.
+  Future<void> _pick() async {
+    if (!Platform.isAndroid) return _pickFile();
+    final fromGallery = await showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined, color: Kami.shu),
+                title: const Text('Галерея'),
+                subtitle: const Text('Фото й зображення'),
+                onTap: () => Navigator.pop(context, true),
+              ),
+              ListTile(
+                leading: const Icon(Icons.folder_outlined, color: Kami.shu),
+                title: const Text('Файли'),
+                subtitle: const Text('PDF і зображення з провідника'),
+                onTap: () => Navigator.pop(context, false),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (fromGallery == null) return;
+    if (fromGallery) {
+      final image = await picker.ImagePicker().pickImage(source: picker.ImageSource.gallery);
+      if (image != null) await _open(image.path);
+    } else {
+      await _pickFile();
+    }
   }
 
   Future<void> _pickFile() async {
@@ -198,7 +238,7 @@ class _PrintSheetState extends State<PrintSheet> {
                   preview: _previews[0],
                   opening: _opening,
                   error: _openError,
-                  onPick: _busy ? null : _pickFile,
+                  onPick: _busy ? null : _pick,
                 ),
                 if (source != null) ...[
                   const SizedBox(height: 16),
