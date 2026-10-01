@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import '../ipp/ipp_client.dart';
 import '../platform/platform_bridge.dart';
 import '../printing/capabilities.dart';
+import '../scan/escl.dart';
 
 /// Принтер, знайдений у локальній мережі через mDNS (DNS-SD `_ipp._tcp` / `_ipps._tcp`).
 class DiscoveredPrinter {
@@ -22,6 +23,8 @@ class DiscoveredPrinter {
   DateTime lastSeen;
 
   PrinterCapabilities? capabilities;
+  ScannerCaps? scanner; // є сканер з eSCL (напр. Brother); null — нема або ще не перевіряли
+  bool scannerProbed = false;
   String? error;
   bool loading = false;
 
@@ -309,12 +312,22 @@ class PrinterDiscovery extends ChangeNotifier {
       p.error = null;
       final now = DateTime.now();
       if (p.lastSeen.isBefore(now)) p.lastSeen = now; // відповів по IPP — отже, живий
+      if (!p.scannerProbed) _probeScanner(p);
     } catch (e) {
       p.error = '$e';
     } finally {
       p.loading = false;
       _notify();
     }
+  }
+
+  /// Один раз дивимось, чи є на тій самій адресі сканер eSCL (звичайний HTTP-запит на порт 80).
+  Future<void> _probeScanner(DiscoveredPrinter p) async {
+    p.scannerProbed = true;
+    final caps = await EsclClient(host: p.host).capabilities();
+    if (caps == null || !caps.supportsJpeg || _disposed) return;
+    p.scanner = caps;
+    _notify();
   }
 
   /// Ручне додавання принтера за IP (коли mDNS мовчить).

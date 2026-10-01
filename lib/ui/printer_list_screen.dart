@@ -6,6 +6,7 @@ import '../settings.dart';
 import '../update/update_controller.dart';
 import '../theme.dart';
 import 'print_sheet.dart';
+import 'scan_screen.dart';
 import 'settings_screen.dart';
 
 class PrinterListScreen extends StatefulWidget {
@@ -79,6 +80,11 @@ class _PrinterListScreenState extends State<PrinterListScreen> {
     });
   }
 
+  /// Сканування; «Друк» зі скану кладе PDF як файл із «Поділитися» — далі вибираєш принтер.
+  Future<void> _openScan(DiscoveredPrinter p) => Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => ScanScreen(printer: p, settings: widget.settings, onPrint: (path) => sharedFile.value = path),
+      ));
+
   Future<void> _openSettings() async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => SettingsScreen(settings: widget.settings, updates: widget.updates)),
@@ -133,6 +139,7 @@ class _PrinterListScreenState extends State<PrinterListScreen> {
                             p.id == widget.settings.lastPrinterId &&
                             printers.length > 1,
                         onTap: () => _openSheet(p),
+                        onScan: p.scanner == null ? null : () => _openScan(p),
                       ),
                     ),
                   const SizedBox(height: 4),
@@ -313,11 +320,12 @@ class _EmptyState extends StatelessWidget {
 }
 
 class PrinterCard extends StatelessWidget {
-  const PrinterCard({super.key, required this.printer, required this.onTap, this.isLast = false});
+  const PrinterCard({super.key, required this.printer, required this.onTap, this.isLast = false, this.onScan});
 
   final DiscoveredPrinter printer;
   final VoidCallback onTap;
   final bool isLast; // останній використаний — позначаємо, якщо принтерів кілька
+  final VoidCallback? onScan; // є сканер — показуємо «Сканувати»
 
   @override
   Widget build(BuildContext context) {
@@ -384,6 +392,15 @@ class PrinterCard extends StatelessWidget {
                   MarkerLevels(markers: caps.markers),
                 ],
               ],
+              if (onScan != null)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: onScan,
+                    icon: const Icon(Icons.document_scanner_outlined, size: 18),
+                    label: const Text('Сканувати'),
+                  ),
+                ),
             ],
           ),
         ),

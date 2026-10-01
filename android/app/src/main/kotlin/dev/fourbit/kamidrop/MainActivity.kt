@@ -1,6 +1,7 @@
 package dev.fourbit.kamidrop
 
 import android.app.PendingIntent
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
@@ -11,9 +12,11 @@ import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.Environment
 import android.provider.MediaStore
 import android.provider.Settings
 import android.provider.OpenableColumns
+import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -30,7 +33,8 @@ import java.util.Locale
  *  - multicast lock (запасний варіант для Dart-реалізації mDNS);
  *  - прийом файлів через «Поділитися → KamiDrop» і «Відкрити за допомогою»;
  *  - вибір фото з галереї (системний Photo Picker, одне або кілька);
- *  - версія застосунку й встановлення оновлення (PackageInstaller).
+ *  - версія застосунку й встановлення оновлення (PackageInstaller);
+ *  - «Поділитися» і «Зберегти в Завантаження» для сканів.
  */
 class MainActivity : FlutterActivity() {
     private var channel: MethodChannel? = null
@@ -73,6 +77,13 @@ class MainActivity : FlutterActivity() {
                     "pickImages" -> pickImages(result)
                     "appInfo" -> result.success(appInfo())
                     "installApk" -> result.success(installApk(call.arguments as String))
+                    "shareFile" -> {
+                        shareFile(call.argument<String>("path")!!, call.argument<String>("mime")!!)
+                        result.success(null)
+                    }
+                    "saveToDownloads" -> result.success(
+                        saveToDownloads(call.argument<String>("path")!!, call.argument<String>("name")!!,
+                            call.argument<String>("mime")!!))
                     else -> result.notImplemented()
                 }
             }
@@ -266,6 +277,31 @@ class MainActivity : FlutterActivity() {
     private fun releaseMulticastLock() {
         multicastLock?.let { if (it.isHeld) it.release() }
         multicastLock = null
+    }
+
+    // ------------------------------------------------------------------ скани
+
+    private fun shareFile(path: String, mime: String) {
+        val uri = FileProvider.getUriForFile(this, "$packageName.files", File(path))
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = mime
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        startActivity(Intent.createChooser(send, null))
+    }
+
+    /** Копія в «Завантаження/KamiDrop». Повертає шлях для людини або null (Android < 10). */
+    private fun saveToDownloads(path: String, name: String, mime: String): String? {
+        if (Build.VERSION.SDK_INT < 29) return null
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+            put(MediaStore.MediaColumns.MIME_TYPE, mime)
+            put(MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/KamiDrop")
+        }
+        val uri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: return null
+        contentResolver.openOutputStream(uri)!!.use { out -> File(path).inputStream().use { it.copyTo(out) } }
+        return "${Environment.DIRECTORY_DOWNLOADS}/KamiDrop/$name"
     }
 
     // ------------------------------------------------------------------ оновлення

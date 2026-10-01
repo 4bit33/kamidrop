@@ -44,6 +44,14 @@
                 <data android:mimeType="application/pdf" />
             </intent-filter>
         </activity>
+        <!-- «Поділитися» сканом: тимчасовий доступ до файлу з cache/scans -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
+        </provider>
         <!-- Статус встановлення оновлення від PackageInstaller -->
         <receiver android:name=".UpdateReceiver" android:exported="false" />
         <meta-data

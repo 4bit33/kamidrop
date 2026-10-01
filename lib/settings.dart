@@ -32,6 +32,8 @@ class KamiSettings {
     Map<String, int>? layoutStreak,
     this.checkUpdates = true,
     this.lastUpdateCheck,
+    this.scanColor,
+    this.scanDpi,
   })  : printers = printers ?? {},
         layoutStreak = layoutStreak ?? {};
 
@@ -41,6 +43,8 @@ class KamiSettings {
   bool rememberLayout; // відкривати з макетом минулого друку
   bool checkUpdates; // раз на добу дивитися нову версію на GitHub (виняток: типово увімкнено)
   DateTime? lastUpdateCheck;
+  String? scanColor; // останні налаштування сканування (ScanColor.name), пам'ятаємо завжди
+  int? scanDpi;
 
   String? lastPrinterId;
   final Map<String, PrinterPrefs> printers;
@@ -127,6 +131,8 @@ class KamiSettings {
         'layoutStreak': layoutStreak,
         'checkUpdates': checkUpdates,
         'lastUpdateCheck': lastUpdateCheck?.toIso8601String(),
+        'scanColor': scanColor,
+        'scanDpi': scanDpi,
         'lastPrinterId': lastPrinterId,
         'printers': printers.map((id, p) => MapEntry(id, p.toJson())),
         'documentLayout': documentLayout == null ? null : layoutToJson(documentLayout!),
@@ -148,6 +154,8 @@ class KamiSettings {
       layoutHintShown: j['layoutHintShown'] as bool? ?? false,
       checkUpdates: j['checkUpdates'] as bool? ?? true,
       lastUpdateCheck: DateTime.tryParse(j['lastUpdateCheck'] as String? ?? ''),
+      scanColor: j['scanColor'] as String?,
+      scanDpi: j['scanDpi'] as int?,
       layoutStreak: (j['layoutStreak'] as Map<String, dynamic>? ?? {}).map((k, v) => MapEntry(k, v as int)),
     );
   }
