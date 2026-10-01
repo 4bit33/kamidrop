@@ -15,6 +15,7 @@ import '../settings.dart';
 import '../theme.dart';
 import 'collage_editor.dart';
 import 'layout_editor.dart';
+import 'page_pager.dart';
 
 Future<void> showPrintSheet(
   BuildContext context,
@@ -56,6 +57,7 @@ class _PrintSheetState extends State<PrintSheet> {
 
   PrintSource? _source;
   final Map<int, ui.Image> _previews = {};
+  final Map<int, Future<ui.Image>> _pageThumbs = {}; // мініатюри для стрічки сторінок
   List<ui.Image> _thumbs = []; // превʼю окремих фото колажу (для редактора)
   int _previewIndex = 0;
   LayoutOptions _layout = const LayoutOptions();
@@ -271,6 +273,28 @@ class _PrintSheetState extends State<PrintSheet> {
       img.dispose();
     }
     _previews.clear();
+    for (final f in _pageThumbs.values) {
+      f.then((img) => img.dispose(), onError: (_) {});
+    }
+    _pageThumbs.clear();
+  }
+
+  Future<ui.Image> _thumbFor(int page) {
+    final source = _source!;
+    return _pageThumbs.putIfAbsent(page, () => source.preview(page, maxSide: 140));
+  }
+
+  /// Сторінки, які видно в превʼю: вибрані для друку, або всі (поки введення неправильне).
+  List<int> get _visiblePages {
+    final s = _source;
+    if (s == null) return const [];
+    return _selectedPages ?? List.generate(s.pageCount, (i) => i);
+  }
+
+  void _onPagesChanged() {
+    final visible = _visiblePages;
+    setState(() {});
+    if (visible.isNotEmpty && !visible.contains(_previewIndex)) _showPage(visible.first);
   }
 
   Future<void> _showPage(int index) async {
@@ -391,6 +415,8 @@ class _PrintSheetState extends State<PrintSheet> {
                     printerMargins: caps.margins,
                     onIndexChanged: _showPage,
                     onEdit: _busy ? null : _editCollage,
+                    pages: _visiblePages,
+                    thumbFor: _thumbFor,
                   ),
                 ] else if (source != null) ...[
                   const SizedBox(height: 16),
@@ -404,6 +430,8 @@ class _PrintSheetState extends State<PrintSheet> {
                     enabled: !_busy,
                     onChanged: (l) => setState(() => _layout = l),
                     onIndexChanged: _showPage,
+                    pages: _visiblePages,
+                    thumbFor: _thumbFor,
                   ),
                 ],
                 if (source != null && source.pageCount > 1) ...[
@@ -411,7 +439,7 @@ class _PrintSheetState extends State<PrintSheet> {
                   TextField(
                     controller: _pagesController,
                     enabled: !_busy,
-                    onChanged: (_) => setState(() {}),
+                    onChanged: (_) => _onPagesChanged(),
                     decoration: InputDecoration(
                       labelText: 'Сторінки',
                       hintText: 'усі ${source.pageCount}, або напр. 1-3, 5',
@@ -673,6 +701,8 @@ class _CollageCard extends StatelessWidget {
     required this.printerMargins,
     required this.onIndexChanged,
     required this.onEdit,
+    required this.pages,
+    required this.thumbFor,
   });
 
   final CollageSource source;
@@ -681,44 +711,29 @@ class _CollageCard extends StatelessWidget {
   final SheetMargins printerMargins;
   final ValueChanged<int> onIndexChanged;
   final VoidCallback? onEdit;
+  final List<int> pages;
+  final Future<ui.Image> Function(int page) thumbFor;
 
   @override
   Widget build(BuildContext context) {
-    final label = Theme.of(context).textTheme.bodySmall;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SizedBox(
-          height: 260,
-          child: SheetPreview(
-            size: source.pageSize(index),
-            image: image,
-            layout: CollageSource.layout,
-            printerMargins: printerMargins,
-          ),
-        ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (source.pageCount > 1) ...[
-              IconButton(
-                onPressed: index > 0 ? () => onIndexChanged(index - 1) : null,
-                icon: const Icon(Icons.chevron_left),
-              ),
-              Text('Аркуш ${index + 1} з ${source.pageCount}', style: label),
-              IconButton(
-                onPressed: index < source.pageCount - 1 ? () => onIndexChanged(index + 1) : null,
-                icon: const Icon(Icons.chevron_right),
-              ),
-            ],
-            TextButton.icon(
-              onPressed: onEdit,
-              icon: const Icon(Icons.edit_outlined, size: 18),
-              label: const Text('Редагувати аркуші'),
-            ),
-          ],
-        ),
-      ],
+    return PagePager(
+      preview: SheetPreview(
+        size: source.pageSize(index),
+        image: image,
+        layout: CollageSource.layout,
+        printerMargins: printerMargins,
+      ),
+      pages: pages,
+      total: source.pageCount,
+      index: index,
+      onIndexChanged: onIndexChanged,
+      thumbFor: thumbFor,
+      unit: 'Аркуш',
+      trailing: TextButton.icon(
+        onPressed: onEdit,
+        icon: const Icon(Icons.edit_outlined, size: 18),
+        label: const Text('Редагувати аркуші'),
+      ),
     );
   }
 }

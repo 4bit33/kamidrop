@@ -6,6 +6,7 @@ import '../printing/compose.dart';
 import '../printing/sources.dart';
 import '../printing/test_page.dart';
 import '../theme.dart';
+import 'page_pager.dart';
 
 /// Мініредактор макета: превʼю аркуша + орієнтація, розмір, поля, розташування.
 class LayoutEditor extends StatelessWidget {
@@ -20,6 +21,8 @@ class LayoutEditor extends StatelessWidget {
     this.printerMargins = SheetMargins.zero,
     this.canBorderless = false,
     this.enabled = true,
+    this.pages,
+    this.thumbFor,
   });
 
   final PrintSource source;
@@ -31,6 +34,8 @@ class LayoutEditor extends StatelessWidget {
   final SheetMargins printerMargins;
   final bool canBorderless; // принтер уміє друк «до краю»
   final bool enabled;
+  final List<int>? pages; // які сторінки показувати (вибрані для друку); null — усі
+  final Future<ui.Image> Function(int page)? thumbFor; // мініатюри для стрічки сторінок
 
   @override
   Widget build(BuildContext context) {
@@ -55,33 +60,20 @@ class LayoutEditor extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SizedBox(
-          height: 260,
-          child:
-              SheetPreview(
+        PagePager(
+          preview: SheetPreview(
             size: source.pageSize(index),
             image: image,
             layout: layout,
             printerMargins: effectiveMargins(layout, printerMargins, printerBorderless: canBorderless),
           ),
+          pages: pages ?? List.generate(source.pageCount, (i) => i),
+          total: source.pageCount,
+          index: index,
+          onIndexChanged: onIndexChanged,
+          thumbFor: thumbFor ?? (i) => source.preview(i, maxSide: 140),
         ),
-        if (source.pageCount > 1)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              IconButton(
-                onPressed: index > 0 ? () => onIndexChanged(index - 1) : null,
-                icon: const Icon(Icons.chevron_left),
-              ),
-              Text('Сторінка ${index + 1} з ${source.pageCount}', style: label),
-              IconButton(
-                onPressed: index < source.pageCount - 1 ? () => onIndexChanged(index + 1) : null,
-                icon: const Icon(Icons.chevron_right),
-              ),
-            ],
-          )
-        else
-          const SizedBox(height: 12),
+        const SizedBox(height: 4),
         Text('Орієнтація', style: label),
         const SizedBox(height: 6),
         SegmentedButton<LayoutOrientation>(

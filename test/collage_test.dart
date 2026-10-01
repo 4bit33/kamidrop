@@ -18,11 +18,27 @@ void main() {
     expect(a[0].bottom <= a[1].y || a[0].right <= a[1].x, isTrue, reason: 'не накладаються');
   });
 
-  test('Авторозкладка: зайві фото переходять на наступний аркуш', () {
-    final c = autoArrange(List.filled(5, (3000.0, 2000.0)));
-    expect(c.sheets.length, 3);
-    expect(c.sheets.map((s) => s.length), [2, 2, 1]);
-    expect(c.sheets.expand((s) => s).map((i) => i.photo), [0, 1, 2, 3, 4]);
+  test('Авторозкладка: усе на одному аркуші, зменшуючи фото', () {
+    final c = autoArrange([(3000, 2000), (2400, 1800), (2000, 3000)]); // A, B, C
+    expect(c.sheets.length, 1);
+    final items = c.sheets.single;
+    final long = items.map((i) => i.w > i.h ? i.w : i.h).first;
+    expect(long, lessThan(152));
+    expect(long, greaterThanOrEqualTo(60));
+    for (final a in items) {
+      for (final b in items) {
+        if (identical(a, b)) continue;
+        final apart = a.right <= b.x || b.right <= a.x || a.bottom <= b.y || b.bottom <= a.y;
+        expect(apart, isTrue, reason: 'не накладаються');
+      }
+    }
+  });
+
+  test('Авторозкладка: забагато фото — 10×15 на кількох аркушах', () {
+    final c = autoArrange(List.filled(30, (3000.0, 2000.0)));
+    expect(c.sheets.length, 15);
+    expect(c.sheets.expand((s) => s).map((i) => i.photo), List.generate(30, (i) => i));
+    expect(c.sheets.first.first.w, closeTo(152, 0.01));
   });
 
   test('Вільне полотно: рамка з пропорціями фото — нічого не обрізається', () {
@@ -91,5 +107,28 @@ void main() {
     expect(c.sheets.expand((s) => s).every((i) => i.quarterTurns == 0), isTrue);
     final vertical = c.sheets.expand((s) => s).firstWhere((i) => i.photo == 2);
     expect(vertical.h, greaterThan(vertical.w), reason: 'вертикальне лишається вертикальним');
+  });
+
+  test('Точна рамка 10×15 в орієнтації фото, кадр по центру', () {
+    final item = CollageItem(photo: 0, x: 10, y: 10, w: 152, h: 114, zoom: 2, panX: 0.5);
+    setExactFrame(item, 4 / 3, 102, 152); // альбомне фото 4:3
+    expect([item.w, item.h], [152, 102]);
+    expect([item.zoom, item.panX, item.panY], [1, 0, 0]);
+    expect(item.x + item.w / 2, 86, reason: 'центр рамки не зсунувся');
+    final v = CollageItem(photo: 0, x: 0, y: 0, w: 10, h: 10);
+    setExactFrame(v, 3 / 4, 102, 152); // вертикальне
+    expect([v.w, v.h], [102, 152]);
+  });
+
+  test('Зсув кадру: за пальцем, не далі краю фото', () {
+    // Фото 4:3 у рамці 152×102: фото 152×114, запас по висоті 12 мм (по 6 з боків), по ширині — нуль.
+    final item = CollageItem(photo: 0, x: 0, y: 0, w: 152, h: 102);
+    panBy(item, 4 / 3, 50, 3, 0, 0);
+    expect(item.panX, 0, reason: 'по ширині запасу нема');
+    expect(item.panY, closeTo(0.5, 1e-9), reason: '3 мм із 6 мм запасу');
+    final (_, y, _, _) = contentRect(item, 4 / 3);
+    expect(y, closeTo(-3, 1e-9), reason: 'фото зсунулося на 3 мм вниз від верхнього положення');
+    panBy(item, 4 / 3, 0, 100, 0, 0);
+    expect(item.panY, 1, reason: 'не далі краю');
   });
 }

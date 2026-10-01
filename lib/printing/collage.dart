@@ -55,14 +55,33 @@ class Collage {
   }
 }
 
-/// Розкладає фото рядками зліва направо, зверху вниз, переходячи на новий аркуш, коли місця
-/// не лишилося. Довший бік кожного фото — [longSideMm]; фото повертається на 90° лише тоді,
-/// коли інакше не влазить у поточне місце (люди чекають, що фото стоятимуть рівно). [marginMm] — поля від краю аркуша, [gapMm] — проміжок між фото.
+/// Розкладає фото так, щоб усі вмістилися на одному аркуші: довгий бік кожного — найбільший
+/// від [longSideMm] до [minLongSideMm], за якого все влазить. Якщо не влазить і так — розмір
+/// [longSideMm] на кількох аркушах (переносити між аркушами можна жестом у редакторі).
 Collage autoArrange(
   List<(double, double)> photoSizes, {
   double longSideMm = 152,
+  double minLongSideMm = 60,
   double marginMm = 5,
   double gapMm = 3,
+}) {
+  for (var side = longSideMm; side >= minLongSideMm; side -= 2) {
+    // Тут без поворотів: краще трохи менші фото, ніж фото набік.
+    final c = _shelfArrange(photoSizes, longSideMm: side, marginMm: marginMm, gapMm: gapMm, allowRotate: false);
+    if (c.sheets.length == 1) return c;
+  }
+  return _shelfArrange(photoSizes, longSideMm: longSideMm, marginMm: marginMm, gapMm: gapMm);
+}
+
+/// Рядками зліва направо, зверху вниз, переходячи на новий аркуш, коли місця не лишилося.
+/// Фото повертається на 90° лише тоді, коли інакше не влазить у поточне місце (люди чекають,
+/// що фото стоятимуть рівно). [marginMm] — поля від краю аркуша, [gapMm] — проміжок між фото.
+Collage _shelfArrange(
+  List<(double, double)> photoSizes, {
+  required double longSideMm,
+  required double marginMm,
+  required double gapMm,
+  bool allowRotate = true,
 }) {
   final collage = Collage(photoSizes);
   final maxW = a4WidthMm - 2 * marginMm, maxH = a4HeightMm - 2 * marginMm;
@@ -80,7 +99,7 @@ Collage autoArrange(
       return (w * k, h * k, turns);
     }
 
-    final options = [frame(0), frame(1)];
+    final options = [frame(0), if (allowRotate) frame(1)];
     (double, double, int)? fits(double x, double y) {
       // Спершу — як є; набік лише тоді, коли інакше тут не влазить.
       return options
@@ -209,3 +228,27 @@ Uint8List composeCollageSheet(int width, int height, List<PlacedPhoto> photos) {
 /// Розмір рамки з довгим боком [longSideMm] для пропорцій [aspect] (ширина / висота).
 (double, double) frameForLongSide(double aspect, double longSideMm) =>
     aspect >= 1 ? (longSideMm, longSideMm / aspect) : (longSideMm * aspect, longSideMm);
+
+/// Рамка рівно [shortMm]×[longMm] в орієнтації фото (з урахуванням повороту): альбомне фото —
+/// альбомна рамка. Фото її заповнює з обрізкою; кадр — по центру.
+void setExactFrame(CollageItem item, double aspect, double shortMm, double longMm) {
+  final cx = item.x + item.w / 2, cy = item.y + item.h / 2;
+  final (w, h) = aspect >= 1 ? (longMm, shortMm) : (shortMm, longMm);
+  item
+    ..w = w
+    ..h = h
+    ..x = cx - w / 2
+    ..y = cy - h / 2
+    ..zoom = 1
+    ..panX = 0
+    ..panY = 0;
+}
+
+/// Зсув кадру: фото рухається за пальцем на [dxMm]/[dyMm] від стану [panX0]/[panY0],
+/// але не далі за свій край (pan у межах −1…1). Якщо запасу по осі немає — вісь не рухається.
+void panBy(CollageItem item, double aspect, double dxMm, double dyMm, double panX0, double panY0) {
+  final (_, _, cw, ch) = contentRect(item, aspect); // розмір фото від pan не залежить
+  final spareX = (cw - item.w) / 2, spareY = (ch - item.h) / 2;
+  item.panX = spareX > 0.01 ? (panX0 + dxMm / spareX).clamp(-1.0, 1.0) : 0;
+  item.panY = spareY > 0.01 ? (panY0 + dyMm / spareY).clamp(-1.0, 1.0) : 0;
+}
