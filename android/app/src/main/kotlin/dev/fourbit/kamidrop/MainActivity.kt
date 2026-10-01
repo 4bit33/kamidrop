@@ -1,7 +1,9 @@
 package dev.fourbit.kamidrop
 
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageInstaller
 import android.net.Uri
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
@@ -10,6 +12,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
+import android.provider.Settings
 import android.provider.OpenableColumns
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -26,7 +29,8 @@ import java.util.Locale
  *    застосункам надсилати mDNS-запити самотужки, а NsdManager робить це від імені системи;
  *  - multicast lock (запасний варіант для Dart-реалізації mDNS);
  *  - прийом файлів через «Поділитися → KamiDrop» і «Відкрити за допомогою»;
- *  - вибір фото з галереї (системний Photo Picker, одне або кілька).
+ *  - вибір фото з галереї (системний Photo Picker, одне або кілька);
+ *  - версія застосунку й встановлення оновлення (PackageInstaller).
  */
 class MainActivity : FlutterActivity() {
     private var channel: MethodChannel? = null
@@ -67,10 +71,17 @@ class MainActivity : FlutterActivity() {
                         pendingSharedPath = null
                     }
                     "pickImages" -> pickImages(result)
+                    "appInfo" -> result.success(appInfo())
+                    "installApk" -> result.success(installApk(call.arguments as String))
                     else -> result.notImplemented()
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        current = this
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -105,6 +116,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        if (current === this) current = null
         stopDiscovery()
         releaseMulticastLock()
         super.onDestroy()
@@ -256,6 +268,49 @@ class MainActivity : FlutterActivity() {
         multicastLock = null
     }
 
+    // ------------------------------------------------------------------ оновлення
+
+    private fun appInfo(): Map<String, Any> {
+        val info = packageManager.getPackageInfo(packageName, 0)
+        @Suppress("DEPRECATION")
+        val code = if (Build.VERSION.SDK_INT >= 28) info.longVersionCode else info.versionCode.toLong()
+        return mapOf(
+            "versionName" to (info.versionName ?: "0"),
+            "versionCode" to code,
+            "abi" to (Build.SUPPORTED_ABIS.firstOrNull() ?: ""),
+        )
+    }
+
+    /**
+     * Ставить APK поверх себе. Повертає "permission", якщо спершу треба дозволити KamiDrop
+     * встановлювати застосунки (відкриваємо відповідні налаштування), інакше "started".
+     */
+    private fun installApk(path: String): String {
+        if (!packageManager.canRequestPackageInstalls()) {
+            startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))
+            return "permission"
+        }
+        val installer = packageManager.packageInstaller
+        val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
+            setAppPackageName(packageName)
+            // Android 12+: застосунок може оновити сам себе без зайвого вікна (якщо система дозволить).
+            if (Build.VERSION.SDK_INT >= 31) setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
+        }
+        val sessionId = installer.createSession(params)
+        installer.openSession(sessionId).use { session ->
+            val apk = File(path)
+            session.openWrite("kamidrop.apk", 0, apk.length()).use { out ->
+                apk.inputStream().use { it.copyTo(out) }
+                session.fsync(out)
+            }
+            val status = Intent(this, UpdateReceiver::class.java)
+            val flags = PendingIntent.FLAG_UPDATE_CURRENT or
+                (if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0)
+            session.commit(PendingIntent.getBroadcast(this, sessionId, status, flags).intentSender)
+        }
+        return "started"
+    }
+
     // ------------------------------------------------------------------ фото з галереї
 
     /** Android 13+ — системний Photo Picker (без дозволів); раніше — звичайний вибір зображень. */
@@ -347,6 +402,14 @@ class MainActivity : FlutterActivity() {
     }
 
     companion object {
+        @Volatile private var current: MainActivity? = null
+
+        /** Помилку встановлення — у застосунок, якщо він відкритий. */
+        fun reportUpdateError(message: String) {
+            val activity = current ?: return
+            activity.runOnUiThread { activity.channel?.invokeMethod("updateError", message) }
+        }
+
         private const val REQUEST_PICK_IMAGE = 4201
         private const val MAX_PICK = 20
     }

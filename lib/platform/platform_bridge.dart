@@ -11,6 +11,7 @@ class PlatformBridge {
   static bool get _isAndroid => !kIsWeb && Platform.isAndroid;
 
   static void Function(String path)? _onSharedFile;
+  static void Function(String message)? _onUpdateError;
   static void Function(Map<String, Object?> service)? _onPrinterFound;
   static bool _handlerInstalled = false;
 
@@ -25,6 +26,8 @@ class PlatformBridge {
           if (args is String) _onSharedFile?.call(args);
         case 'printerFound':
           if (args is Map) _onPrinterFound?.call(Map<String, Object?>.from(args));
+        case 'updateError':
+          if (args is String) _onUpdateError?.call(args);
       }
     });
   }
@@ -83,6 +86,26 @@ class PlatformBridge {
     if (!_isAndroid) return const [];
     final paths = await _channel.invokeListMethod<String>('pickImages');
     return paths ?? const [];
+  }
+
+  /// Версія застосунку й основна архітектура процесора (для вибору APK). null — не Android.
+  static Future<({String version, int code, String abi})?> appInfo() async {
+    if (!_isAndroid) return null;
+    final m = await _channel.invokeMapMethod<String, Object?>('appInfo');
+    if (m == null) return null;
+    return (version: m['versionName'] as String, code: (m['versionCode'] as num).toInt(), abi: m['abi'] as String);
+  }
+
+  /// Ставить завантажений APK поверх застосунку. 'permission' — спершу треба дозволити
+  /// KamiDrop встановлювати застосунки (налаштування вже відкрито), 'started' — пішло.
+  static Future<String> installApk(String path) async =>
+      await _channel.invokeMethod<String>('installApk', path) ?? 'started';
+
+  /// Помилки встановлення оновлення, що приходять від системи пізніше.
+  static void listenUpdateErrors(void Function(String message) onError) {
+    if (!_isAndroid) return;
+    _onUpdateError = onError;
+    _ensureHandler();
   }
 
   /// Файли, надіслані, коли застосунок уже відкритий.

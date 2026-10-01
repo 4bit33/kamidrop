@@ -4,6 +4,8 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <!-- Оновлення застосунку з GitHub-релізів (встановлення завжди з дозволу людини) -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:label="KamiDrop"
@@ -42,6 +44,8 @@
                 <data android:mimeType="application/pdf" />
             </intent-filter>
         </activity>
+        <!-- Статус встановлення оновлення від PackageInstaller -->
+        <receiver android:name=".UpdateReceiver" android:exported="false" />
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />

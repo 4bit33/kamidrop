@@ -30,13 +30,17 @@ class KamiSettings {
     this.rememberLayout = false,
     this.layoutHintShown = false,
     Map<String, int>? layoutStreak,
+    this.checkUpdates = true,
+    this.lastUpdateCheck,
   })  : printers = printers ?? {},
         layoutStreak = layoutStreak ?? {};
 
-  // Перемикачі на екрані налаштувань. Усі типово вимкнені.
+  // Перемикачі на екрані налаштувань. Типово вимкнені (крім перевірки оновлень).
   bool autoOpenShared; // файл із «Поділитися» одразу відкриває аркуш друку
   bool lastPrinterFirst; // останній принтер — першим у списку
   bool rememberLayout; // відкривати з макетом минулого друку
+  bool checkUpdates; // раз на добу дивитися нову версію на GitHub (виняток: типово увімкнено)
+  DateTime? lastUpdateCheck;
 
   String? lastPrinterId;
   final Map<String, PrinterPrefs> printers;
@@ -121,6 +125,8 @@ class KamiSettings {
         'rememberLayout': rememberLayout,
         'layoutHintShown': layoutHintShown,
         'layoutStreak': layoutStreak,
+        'checkUpdates': checkUpdates,
+        'lastUpdateCheck': lastUpdateCheck?.toIso8601String(),
         'lastPrinterId': lastPrinterId,
         'printers': printers.map((id, p) => MapEntry(id, p.toJson())),
         'documentLayout': documentLayout == null ? null : layoutToJson(documentLayout!),
@@ -140,6 +146,8 @@ class KamiSettings {
       lastPrinterFirst: j['lastPrinterFirst'] as bool? ?? false,
       rememberLayout: j['rememberLayout'] as bool? ?? false,
       layoutHintShown: j['layoutHintShown'] as bool? ?? false,
+      checkUpdates: j['checkUpdates'] as bool? ?? true,
+      lastUpdateCheck: DateTime.tryParse(j['lastUpdateCheck'] as String? ?? ''),
       layoutStreak: (j['layoutStreak'] as Map<String, dynamic>? ?? {}).map((k, v) => MapEntry(k, v as int)),
     );
   }

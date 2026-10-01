@@ -4,6 +4,7 @@ import 'package:pdfrx/pdfrx.dart';
 import 'discovery/discovery.dart';
 import 'platform/platform_bridge.dart';
 import 'settings.dart';
+import 'update/update_controller.dart';
 import 'theme.dart';
 import 'ui/printer_list_screen.dart';
 
@@ -30,6 +31,7 @@ class _KamiDropAppState extends State<KamiDropApp> {
   final sharedFile = ValueNotifier<String?>(null);
 
   KamiSettings settings = KamiSettings();
+  late final updates = UpdateController(settings);
 
   @override
   void initState() {
@@ -37,7 +39,11 @@ class _KamiDropAppState extends State<KamiDropApp> {
     if (widget.startDiscovery) {
       discovery.start();
       KamiSettings.load().then((s) {
-        if (mounted) setState(() => settings = s);
+        if (!mounted) return;
+        setState(() => settings = s);
+        updates
+          ..settings = s
+          ..check();
       });
     }
     PlatformBridge.takeSharedFile().then((path) {
@@ -50,6 +56,7 @@ class _KamiDropAppState extends State<KamiDropApp> {
   void dispose() {
     discovery.dispose();
     sharedFile.dispose();
+    updates.dispose();
     super.dispose();
   }
 
@@ -59,7 +66,7 @@ class _KamiDropAppState extends State<KamiDropApp> {
       title: 'KamiDrop',
       debugShowCheckedModeBanner: false,
       theme: kamiTheme(),
-      home: PrinterListScreen(discovery: discovery, sharedFile: sharedFile, settings: settings),
+      home: PrinterListScreen(discovery: discovery, sharedFile: sharedFile, settings: settings, updates: updates),
     );
   }
 }

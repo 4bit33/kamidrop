@@ -3,16 +3,24 @@ import 'package:flutter/material.dart';
 import '../discovery/discovery.dart';
 import '../printing/capabilities.dart';
 import '../settings.dart';
+import '../update/update_controller.dart';
 import '../theme.dart';
 import 'print_sheet.dart';
 import 'settings_screen.dart';
 
 class PrinterListScreen extends StatefulWidget {
-  const PrinterListScreen({super.key, required this.discovery, required this.sharedFile, required this.settings});
+  const PrinterListScreen({
+    super.key,
+    required this.discovery,
+    required this.sharedFile,
+    required this.settings,
+    required this.updates,
+  });
 
   final PrinterDiscovery discovery;
   final ValueNotifier<String?> sharedFile;
   final KamiSettings settings;
+  final UpdateController updates;
 
   @override
   State<PrinterListScreen> createState() => _PrinterListScreenState();
@@ -73,7 +81,7 @@ class _PrinterListScreenState extends State<PrinterListScreen> {
 
   Future<void> _openSettings() async {
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => SettingsScreen(settings: widget.settings)),
+      MaterialPageRoute<void>(builder: (_) => SettingsScreen(settings: widget.settings, updates: widget.updates)),
     );
     if (mounted) setState(() {});
     _maybeAutoOpen();
@@ -94,7 +102,7 @@ class _PrinterListScreenState extends State<PrinterListScreen> {
     return Scaffold(
       body: SafeArea(
         child: ListenableBuilder(
-          listenable: Listenable.merge([discovery, sharedFile]),
+          listenable: Listenable.merge([discovery, sharedFile, widget.updates]),
           builder: (context, _) {
             final printers = _printers;
             final shared = sharedFile.value;
@@ -107,6 +115,10 @@ class _PrinterListScreenState extends State<PrinterListScreen> {
                 children: [
                   _Header(scanning: discovery.scanning, onRefresh: discovery.scan, onSettings: _openSettings),
                   const SizedBox(height: 28),
+                  if (widget.updates.bannerVisible) ...[
+                    _UpdateBanner(updates: widget.updates),
+                    const SizedBox(height: 16),
+                  ],
                   if (shared != null) ...[
                     _SharedFileBanner(path: shared, onClose: () => sharedFile.value = null),
                     const SizedBox(height: 16),
@@ -175,7 +187,7 @@ class _AddPrinterDialogState extends State<_AddPrinterDialog> {
         controller: _controller,
         autofocus: true,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        decoration: const InputDecoration(hintText: '192.168.0.78'),
+        decoration: const InputDecoration(hintText: '192.168.1.50'),
         onSubmitted: (v) => Navigator.pop(context, v.trim()),
       ),
       actions: [
@@ -454,6 +466,70 @@ class MarkerLevels extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// «Є нова версія» — з кнопкою оновлення й прогресом завантаження.
+class _UpdateBanner extends StatelessWidget {
+  const _UpdateBanner({required this.updates});
+
+  final UpdateController updates;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final info = updates.info!;
+    final (text, busy) = switch (updates.state) {
+      UpdateState.downloading => ('Завантажую версію ${info.version}… ${(updates.progress * 100).round()} %', true),
+      UpdateState.installing => ('Встановлюю версію ${info.version}…', true),
+      _ => ('Є нова версія ${info.version}', false),
+    };
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+      decoration: BoxDecoration(
+        color: Kami.shu.withValues(alpha: 0.06),
+        border: Border.all(color: Kami.shu.withValues(alpha: 0.3)),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.system_update_outlined, color: Kami.shu, size: 20),
+              const SizedBox(width: 10),
+              Expanded(child: Text(text, style: theme.textTheme.titleSmall)),
+              if (!busy)
+                IconButton(
+                  onPressed: updates.dismiss,
+                  icon: const Icon(Icons.close, size: 18, color: Kami.stone),
+                  tooltip: 'Пізніше',
+                ),
+            ],
+          ),
+          if (busy)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(0, 8, 8, 8),
+              child: LinearProgressIndicator(
+                value: updates.state == UpdateState.downloading ? updates.progress : null,
+                minHeight: 2,
+                color: Kami.shu,
+                backgroundColor: Kami.line,
+              ),
+            ),
+          if (updates.message != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4, right: 8),
+              child: Text(updates.message!, style: theme.textTheme.bodySmall?.copyWith(color: Kami.shu)),
+            ),
+          if (!busy)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(onPressed: updates.install, child: const Text('Оновити')),
+            ),
+        ],
+      ),
     );
   }
 }
