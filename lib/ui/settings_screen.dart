@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../settings.dart';
 import '../theme.dart';
 import '../update/update_controller.dart';
+import '../l10n/l10n.dart';
 
 /// Налаштування застосунку. Кожна зміна зберігається одразу.
 class SettingsScreen extends StatefulWidget {
@@ -26,29 +27,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Налаштування')),
+      appBar: AppBar(title: Text(l10n.settings)),
       body: ListView(
         padding: const EdgeInsets.symmetric(vertical: 8),
         children: [
+          // Мова: за системою або вибрана вручну. Назви мов — кожна своєю мовою.
+          ListTile(
+            title: Text(l10n.language),
+            trailing: DropdownButton<String>(
+              value: s.language,
+              underline: const SizedBox.shrink(),
+              items: [
+                DropdownMenuItem(value: 'system', child: Text(l10n.languageSystem)),
+                const DropdownMenuItem(value: 'uk', child: Text('Українська')),
+                const DropdownMenuItem(value: 'en', child: Text('English')),
+              ],
+              onChanged: (v) {
+                if (v == null) return;
+                _set(() => s.language = v);
+                appLanguage.value = v;
+              },
+            ),
+          ),
+          const Divider(height: 8),
           SwitchListTile(
-            title: const Text('Одразу відкривати друк'),
-            subtitle: const Text('Файл із «Поділитися» відкривається на останньому принтері '
-                '(або на єдиному, якщо він один)'),
+            title: Text(l10n.autoOpenTitle),
+            subtitle: Text(l10n.autoOpenSubtitle),
             value: s.autoOpenShared,
             activeThumbColor: Kami.shu,
             onChanged: (v) => _set(() => s.autoOpenShared = v),
           ),
           SwitchListTile(
-            title: const Text('Останній принтер першим'),
-            subtitle: const Text('Ставити принтер, на якому друкував востаннє, на початок списку'),
+            title: Text(l10n.lastFirstTitle),
+            subtitle: Text(l10n.lastFirstSubtitle),
             value: s.lastPrinterFirst,
             activeThumbColor: Kami.shu,
             onChanged: (v) => _set(() => s.lastPrinterFirst = v),
           ),
           SwitchListTile(
-            title: const Text('Пам\'ятати макет'),
-            subtitle: const Text('Фото й документи відкриваються з макетом минулого друку, '
-                'а не з типовим'),
+            title: Text(l10n.rememberLayoutTitle),
+            subtitle: Text(l10n.rememberLayoutSubtitle),
             value: s.rememberLayout,
             activeThumbColor: Kami.shu,
             onChanged: (v) => _set(() => s.rememberLayout = v),
@@ -56,9 +74,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           if (widget.updates != null) ...[
             const Divider(height: 24),
             SwitchListTile(
-              title: const Text('Перевіряти оновлення'),
-              subtitle: const Text('Раз на добу дивитися, чи є нова версія KamiDrop. '
-                  'Встановлення — лише після твого натискання'),
+              title: Text(l10n.checkUpdatesTitle),
+              subtitle: Text(l10n.checkUpdatesSubtitle),
               value: s.checkUpdates,
               activeThumbColor: Kami.shu,
               onChanged: (v) => _set(() => s.checkUpdates = v),
@@ -68,21 +85,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
               builder: (context, _) {
                 final u = widget.updates!;
                 final status = switch (u.state) {
-                  UpdateState.checking => 'Перевіряю…',
-                  UpdateState.upToDate => 'Встановлено найновішу версію',
+                  UpdateState.checking => l10n.checking,
+                  UpdateState.upToDate => l10n.upToDate,
                   UpdateState.available ||
                   UpdateState.downloading ||
                   UpdateState.installing =>
-                    'Є версія ${u.info?.version} — оновити можна на головному екрані',
-                  UpdateState.error => u.message ?? 'Помилка',
+                    l10n.updateOnMainScreen(u.info?.version ?? ''),
+                  UpdateState.error => u.message ?? l10n.error,
                   UpdateState.idle => null,
                 };
                 return ListTile(
-                  title: Text('Версія ${u.currentVersion ?? '—'}'),
+                  title: Text(l10n.versionLabel(u.currentVersion ?? '—')),
                   subtitle: status == null ? null : Text(status),
                   trailing: TextButton(
                     onPressed: u.state == UpdateState.checking ? null : () => u.check(force: true),
-                    child: const Text('Перевірити'),
+                    child: Text(l10n.check),
                   ),
                 );
               },

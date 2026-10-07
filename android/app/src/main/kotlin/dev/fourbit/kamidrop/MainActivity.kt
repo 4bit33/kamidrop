@@ -41,6 +41,7 @@ class MainActivity : FlutterActivity() {
     private var multicastLock: WifiManager.MulticastLock? = null
     private var pendingSharedPath: String? = null
     private var pendingPick: MethodChannel.Result? = null
+    private var pickPhotoWord: String? = null // «Фото» / «Photo» — мовою застосунку
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private var nsd: NsdManager? = null
@@ -74,7 +75,10 @@ class MainActivity : FlutterActivity() {
                         result.success(pendingSharedPath)
                         pendingSharedPath = null
                     }
-                    "pickImages" -> pickImages(result)
+                    "pickImages" -> {
+                        pickPhotoWord = call.argument<String>("photoWord")
+                        pickImages(result)
+                    }
                     "appInfo" -> result.success(appInfo())
                     "installApk" -> result.success(installApk(call.arguments as String))
                     "shareFiles" -> {
@@ -120,7 +124,7 @@ class MainActivity : FlutterActivity() {
         try {
             // Тека — лише під цей вибір: старі фото стираємо один раз, а не перед кожним.
             val dir = freshDir("picked")
-            result.success(uris.map { copyToCache(it, dir) })
+            result.success(uris.map { copyToCache(it, dir, pickPhotoWord) })
         } catch (e: Exception) {
             result.error("pick", e.message, null)
         }
@@ -399,7 +403,7 @@ class MainActivity : FlutterActivity() {
     }
 
     /** Копіює вміст [uri] у [dir] під зрозумілою унікальною назвою. */
-    private fun copyToCache(uri: Uri, dir: File): String {
+    private fun copyToCache(uri: Uri, dir: File, photoWord: String? = null): String {
         var name: String? = null
         var dateTaken: Long? = null
         if (uri.scheme == "content") {
@@ -429,8 +433,8 @@ class MainActivity : FlutterActivity() {
         val taken = dateTaken
         fileName = when {
             base.all { it.isDigit() } && taken != null && taken > 0 ->
-                "Фото ${SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.ROOT).format(Date(taken))}.$ext"
-            base.all { it.isDigit() } -> "Фото.$ext"
+                "${photoWord ?: getString(R.string.photo)} ${SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.ROOT).format(Date(taken))}.$ext"
+            base.all { it.isDigit() } -> "${photoWord ?: getString(R.string.photo)}.$ext"
             else -> "$base.$ext"
         }
         var out = File(dir, fileName)

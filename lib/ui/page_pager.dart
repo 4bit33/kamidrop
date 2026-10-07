@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+import '../l10n/l10n.dart';
 import '../theme.dart';
 
 /// Перегляд сторінок: превʼю (свайп — сусідня сторінка) і стрічка мініатюр під ним, як у галереї.
@@ -15,7 +16,7 @@ class PagePager extends StatelessWidget {
     required this.index,
     required this.onIndexChanged,
     required this.thumbFor,
-    this.unit = 'Сторінка',
+    this.unit,
     this.trailing,
   });
 
@@ -25,7 +26,7 @@ class PagePager extends StatelessWidget {
   final int index;
   final ValueChanged<int> onIndexChanged;
   final Future<ui.Image> Function(int page) thumbFor;
-  final String unit; // «Сторінка» / «Аркуш»
+  final String? unit; // «Сторінка» (типово) / «Аркуш»
   final Widget? trailing; // напр. «Редагувати аркуші»
 
   void _step(int dir) {
@@ -39,8 +40,8 @@ class PagePager extends StatelessWidget {
     final small = Theme.of(context).textTheme.bodySmall;
     final pos = pages.indexOf(index);
     final label = pages.length == total
-        ? '$unit ${index + 1} з $total'
-        : '$unit ${index + 1} · ${pos + 1} з ${pages.length} вибраних';
+        ? l10n.pageOf(unit ?? l10n.unitPage, index + 1, total)
+        : l10n.pageOfSelected(unit ?? l10n.unitPage, index + 1, pos + 1, pages.length);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

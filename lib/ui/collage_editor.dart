@@ -7,6 +7,7 @@ import '../printing/collage.dart';
 import '../printing/compose.dart';
 import '../printing/sources.dart';
 import '../theme.dart';
+import '../l10n/l10n.dart';
 
 /// Точні розміри фото (короткий × довгий бік, мм) — як у PhotoSize.
 const _sizes = [('9×13', 89.0, 127.0), ('10×15', 102.0, 152.0), ('13×18', 127.0, 178.0)];
@@ -238,7 +239,7 @@ class _CollageEditorScreenState extends State<CollageEditorScreen> {
   void _moveToSheet(CollageItem item, int dir) {
     final to = _sheet + dir;
     if (to < 0) {
-      _toast('Це перший аркуш');
+      _toast(l10n.firstSheet);
       return;
     }
     setState(() {
@@ -250,7 +251,7 @@ class _CollageEditorScreenState extends State<CollageEditorScreen> {
       _selected = item;
       _cropping = null;
     });
-    _toast('Фото на аркуші ${to + 1}');
+    _toast(l10n.photoOnSheet(to + 1));
   }
 
   void _toast(String text) {
@@ -374,11 +375,11 @@ class _CollageEditorScreenState extends State<CollageEditorScreen> {
     final crop = _cropping;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Аркуш із фото'),
+        title: Text(l10n.collageTitle),
         actions: [
           if (widget.onAddPhotos != null)
-            IconButton(onPressed: _addPhotos, icon: const Icon(Icons.add_photo_alternate_outlined), tooltip: 'Додати фото'),
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Готово')),
+            IconButton(onPressed: _addPhotos, icon: const Icon(Icons.add_photo_alternate_outlined), tooltip: l10n.addPhotos),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(l10n.done)),
         ],
       ),
       body: SafeArea(
@@ -423,15 +424,15 @@ class _CollageEditorScreenState extends State<CollageEditorScreen> {
                   ? Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text('Кадрування: тягни фото в рамці, двома пальцями — ближче', style: small),
+                        Text(l10n.cropHint, style: small),
                         const SizedBox(height: 8),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            TextButton(onPressed: () => _setWhole(crop), child: const Text('Без обрізки')),
+                            TextButton(onPressed: () => _setWhole(crop), child: Text(l10n.noCrop)),
                             const SizedBox(width: 8),
                             FilledButton(
-                                onPressed: () => setState(() => _cropping = null), child: const Text('Готово')),
+                                onPressed: () => setState(() => _cropping = null), child: Text(l10n.done)),
                           ],
                         ),
                       ],
@@ -440,7 +441,7 @@ class _CollageEditorScreenState extends State<CollageEditorScreen> {
                       ? Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text('${_cm(sel.w)} × ${_cm(sel.h)} см', style: small?.copyWith(color: Kami.shu)),
+                            Text(l10n.sizeCm(_cm(sel.w), _cm(sel.h)), style: small?.copyWith(color: Kami.shu)),
                             const SizedBox(height: 4),
                             SingleChildScrollView(
                               scrollDirection: Axis.horizontal,
@@ -450,25 +451,25 @@ class _CollageEditorScreenState extends State<CollageEditorScreen> {
                                   IconButton(
                                       onPressed: () => _rotate(sel),
                                       icon: const Icon(Icons.rotate_90_degrees_cw),
-                                      tooltip: 'Повернути'),
-                                  _chip('Ціле', _isWhole(sel), () => _setWhole(sel)),
+                                      tooltip: l10n.rotate),
+                                  _chip(l10n.whole, _isWhole(sel), () => _setWhole(sel)),
                                   for (final (label, s, l) in _sizes)
                                     _chip(label, _isExact(sel, s, l), () => _setExact(sel, s, l)),
                                   IconButton(
                                       onPressed: () => _duplicate(sel),
                                       icon: const Icon(Icons.copy_outlined),
-                                      tooltip: 'Копія'),
+                                      tooltip: l10n.duplicate),
                                   IconButton(
                                       onPressed: () => _delete(sel),
                                       icon: const Icon(Icons.delete_outline),
-                                      tooltip: 'Прибрати'),
+                                      tooltip: l10n.remove),
                                 ],
                               ),
                             ),
                             Padding(
                               padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
                               child: Text(
-                                'Подвійний тап — кадрувати · тримай фото й свайпни іншим пальцем — на інший аркуш',
+                                l10n.collageHint,
                                 style: small?.copyWith(color: Kami.stone),
                                 textAlign: TextAlign.center,
                                 maxLines: 2,
@@ -483,7 +484,7 @@ class _CollageEditorScreenState extends State<CollageEditorScreen> {
                               onPressed: _sheet > 0 ? () => _goToSheet(_sheet - 1) : null,
                               icon: const Icon(Icons.chevron_left),
                             ),
-                            Text('Аркуш ${_sheet + 1} з ${collage.sheets.length}', style: small),
+                            Text(l10n.pageOf(l10n.unitSheet, _sheet + 1, collage.sheets.length), style: small),
                             IconButton(
                               onPressed: _sheet < collage.sheets.length - 1 ? () => _goToSheet(_sheet + 1) : null,
                               icon: const Icon(Icons.chevron_right),
@@ -492,7 +493,7 @@ class _CollageEditorScreenState extends State<CollageEditorScreen> {
                             TextButton.icon(
                               onPressed: _addSheet,
                               icon: const Icon(Icons.add, size: 18),
-                              label: const Text('Аркуш'),
+                              label: Text(l10n.unitSheet),
                               style: TextButton.styleFrom(foregroundColor: Kami.stone),
                             ),
                           ],
@@ -516,7 +517,7 @@ class _CollageEditorScreenState extends State<CollageEditorScreen> {
       );
 }
 
-String _cm(double mm) => (mm / 10).toStringAsFixed(1).replaceAll('.', ',');
+String _cm(double mm) => decimal(mm / 10, 1);
 
 class _CollagePainter extends CustomPainter {
   _CollagePainter({

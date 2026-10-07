@@ -12,6 +12,7 @@ import '../scan/escl.dart';
 import '../scan/pdf_writer.dart';
 import '../settings.dart';
 import '../theme.dart';
+import '../l10n/l10n.dart';
 
 /// A4 у 1/300 дюйма (8,27 × 11,69″).
 const _a4Width = 2480, _a4Height = 3508;
@@ -126,7 +127,7 @@ class _ScanScreenState extends State<ScanScreen> {
 
   Future<_ScannedPage> _toPage(Uint8List jpeg) async {
     final info = jpegInfo(jpeg);
-    if (info == null) throw ScanException('Сканер віддав не JPEG');
+    if (info == null) throw ScanException(l10n.notJpeg);
     final (w, h, comps) = info;
     if (_color != ScanColor.blackWhite) {
       return _ScannedPage(JpegPage(jpeg, w, h, _dpi, components: comps), await _decode(jpeg, targetWidth: 360));
@@ -205,7 +206,7 @@ class _ScanScreenState extends State<ScanScreen> {
   String _fileName() {
     final n = DateTime.now();
     String two(int v) => v.toString().padLeft(2, '0');
-    return 'Скан ${two(n.day)}.${two(n.month)}.${n.year} ${two(n.hour)}-${two(n.minute)}';
+    return l10n.scanFileName('${two(n.day)}.${two(n.month)}.${n.year} ${two(n.hour)}-${two(n.minute)}');
   }
 
   /// MIME для «Поділитися»: якщо файли різні (JPEG + PNG для ч/б) — загальний image/*.
@@ -220,7 +221,7 @@ class _ScanScreenState extends State<ScanScreen> {
       final files = await _writeFiles();
       await PlatformBridge.shareFiles([for (final f in files) f.path], _mimeOf(files));
     } catch (e) {
-      _say('Не вдалося поділитися: $e', error: true);
+      _say(l10n.shareFailed('$e'), error: true);
     }
   }
 
@@ -235,18 +236,18 @@ class _ScanScreenState extends State<ScanScreen> {
         if (where == null) break;
       }
       if (where == null) {
-        _say('Зберегти не вийшло — скористайся «Поділитися»', error: true);
+        _say(l10n.saveFailedUseShare, error: true);
       } else {
         final folder = where.substring(0, where.lastIndexOf('/'));
         final bw = _format == ScanFormat.jpeg && _pages.any((p) => p.pdfPage is BilevelPage)
-            ? ' (чорно-білі сторінки — у PNG)'
+            ? l10n.bwAsPng
             : '';
         _say(files.length == 1
-            ? 'Збережено: $where'
-            : 'Збережено ${files.length} ${_filesWord(files.length)} у $folder$bw');
+            ? l10n.savedTo(where)
+            : l10n.savedFiles(files.length, folder) + bw);
       }
     } catch (e) {
-      _say('Не вдалося зберегти: $e', error: true);
+      _say(l10n.saveFailed('$e'), error: true);
     }
   }
 
@@ -266,7 +267,7 @@ class _ScanScreenState extends State<ScanScreen> {
     final small = theme.textTheme.bodySmall;
     final has = _pages.isNotEmpty;
     return Scaffold(
-      appBar: AppBar(title: Text('Сканування · ${_shortName(widget.scanner.name)}')),
+      appBar: AppBar(title: Text(l10n.scanTitle(_shortName(widget.scanner.name)))),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
@@ -279,8 +280,8 @@ class _ScanScreenState extends State<ScanScreen> {
                     BoxDecoration(border: Border.all(color: Kami.line), borderRadius: BorderRadius.circular(10)),
                 child: Text(
                     _feeder
-                        ? 'Поклади аркуші в подавач\nі натисни «Сканувати» — відскануються всі'
-                        : 'Поклади аркуш на скло лицем донизу\nі натисни «Сканувати»',
+                        ? l10n.feederHint
+                        : l10n.glassHint,
                     textAlign: TextAlign.center,
                     style: small),
               )
@@ -306,7 +307,7 @@ class _ScanScreenState extends State<ScanScreen> {
                         right: 0,
                         top: 0,
                         child: IconButton(
-                          tooltip: 'Прибрати сторінку',
+                          tooltip: l10n.removePage,
                           icon: const Icon(Icons.close, size: 18, color: Kami.stone),
                           onPressed: _scanning ? null : () => setState(() => _pages.removeAt(i).thumb.dispose()),
                         ),
@@ -317,20 +318,20 @@ class _ScanScreenState extends State<ScanScreen> {
               ),
             const SizedBox(height: 16),
             if (_caps.adf && _caps.platen) ...[
-              Text('Звідки', style: small),
+              Text(l10n.source, style: small),
               const SizedBox(height: 6),
               SegmentedButton<bool>(
                 showSelectedIcon: false,
-                segments: const [
-                  ButtonSegment(value: false, label: Text('Скло')),
-                  ButtonSegment(value: true, label: Text('Подавач')),
+                segments: [
+                  ButtonSegment(value: false, label: Text(l10n.glass)),
+                  ButtonSegment(value: true, label: Text(l10n.feeder)),
                 ],
                 selected: {_feeder},
                 onSelectionChanged: _scanning ? null : (s) => setState(() => _feeder = s.first),
               ),
               const SizedBox(height: 14),
             ],
-            Text('Колір', style: small),
+            Text(l10n.color, style: small),
             const SizedBox(height: 6),
             SegmentedButton<ScanColor>(
               showSelectedIcon: false,
@@ -339,9 +340,9 @@ class _ScanScreenState extends State<ScanScreen> {
                   ButtonSegment(
                     value: c,
                     label: Text(switch (c) {
-                      ScanColor.color => 'Кольорове',
-                      ScanColor.gray => 'Сіре',
-                      ScanColor.blackWhite => 'Чорно-біле',
+                      ScanColor.color => l10n.scanColor,
+                      ScanColor.gray => l10n.scanGray,
+                      ScanColor.blackWhite => l10n.scanBw,
                     }),
                   ),
               ],
@@ -349,7 +350,7 @@ class _ScanScreenState extends State<ScanScreen> {
               onSelectionChanged: _scanning ? null : (s) => setState(() => _color = s.first),
             ),
             const SizedBox(height: 14),
-            Text('Роздільність', style: small),
+            Text(l10n.resolution, style: small),
             const SizedBox(height: 6),
             Wrap(
               spacing: 6,
@@ -367,9 +368,9 @@ class _ScanScreenState extends State<ScanScreen> {
             const SizedBox(height: 4),
             Text(
                 [
-                  '200 dpi — документи',
-                  if (_caps.resolutions.contains(300)) '300 — фото',
-                  if (_caps.resolutions.contains(600)) '600 — дрібні деталі (довго й великий файл)',
+                  l10n.dpiDocs,
+                  if (_caps.resolutions.contains(300)) l10n.dpiPhotos,
+                  if (_caps.resolutions.contains(600)) l10n.dpiFine,
                 ].join(', '),
                 style: small?.copyWith(color: Kami.stone)),
             const SizedBox(height: 20),
@@ -379,8 +380,8 @@ class _ScanScreenState extends State<ScanScreen> {
                   ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.document_scanner_outlined),
               label: Text(_scanning
-                  ? (_gotPages > 0 ? 'Сканую… $_gotPages стор.' : 'Сканую…')
-                  : (has ? (_feeder ? 'Сканувати ще' : 'Сканувати ще сторінку') : 'Сканувати')),
+                  ? (_gotPages > 0 ? l10n.scanningPages(_gotPages) : l10n.scanning)
+                  : (has ? (_feeder ? l10n.scanMore : l10n.scanAnotherPage) : l10n.scan)),
               style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
             ),
             if (_message != null) ...[
@@ -389,7 +390,7 @@ class _ScanScreenState extends State<ScanScreen> {
             ],
             if (has) ...[
               const SizedBox(height: 16),
-              Text('Формат', style: small),
+              Text(l10n.format, style: small),
               const SizedBox(height: 6),
               SegmentedButton<ScanFormat>(
                 showSelectedIcon: false,
@@ -405,8 +406,8 @@ class _ScanScreenState extends State<ScanScreen> {
               const SizedBox(height: 6),
               Text(
                   _format == ScanFormat.pdf
-                      ? '${_pages.length} стор. → один PDF'
-                      : '${_pages.length} стор. → ${_pages.length} ${_format.label}-${_filesWord(_pages.length)}',
+                      ? l10n.pagesToOnePdf(_pages.length)
+                      : l10n.pagesToFiles(_pages.length, _format.label),
                   style: small,
                   textAlign: TextAlign.center),
               const SizedBox(height: 8),
@@ -419,18 +420,18 @@ class _ScanScreenState extends State<ScanScreen> {
                     OutlinedButton.icon(
                       onPressed: _scanning ? null : _share,
                       icon: const Icon(Icons.share_outlined, size: 18),
-                      label: const Text('Поділитися'),
+                      label: Text(l10n.share),
                     ),
                     OutlinedButton.icon(
                       onPressed: _scanning ? null : _save,
                       icon: const Icon(Icons.download_outlined, size: 18),
-                      label: const Text('Зберегти'),
+                      label: Text(l10n.save),
                     ),
                   ],
                   OutlinedButton.icon(
                     onPressed: _scanning ? null : _print,
                     icon: const Icon(Icons.print_outlined, size: 18),
-                    label: const Text('Друк'),
+                    label: Text(l10n.printShort),
                   ),
                 ],
               ),
@@ -494,10 +495,3 @@ Uint8List _bilevelToRgba(Uint8List bits, int w, int h) {
   return out;
 }
 
-/// 1 файл, 2 файли, 5 файлів, 21 файл.
-String _filesWord(int n) {
-  final m10 = n % 10, m100 = n % 100;
-  if (m10 == 1 && m100 != 11) return 'файл';
-  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return 'файли';
-  return 'файлів';
-}

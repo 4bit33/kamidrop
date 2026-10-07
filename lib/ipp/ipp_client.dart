@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'ipp.dart';
+import '../l10n/l10n.dart';
 
 class IppException implements Exception {
   final String message;
@@ -53,11 +54,11 @@ class IppClient {
       }
       return parseIppResponse(bytes.takeBytes());
     } on TimeoutException {
-      throw IppException('Принтер не відповідає. Спробуй його перезавантажити.');
+      throw IppException(l10n.printerNotResponding);
     } on SocketException catch (e) {
-      throw IppException('Немає з\'єднання з принтером: ${e.osError?.message ?? e.message}');
+      throw IppException(l10n.noConnectionPrinter(e.osError?.message ?? e.message));
     } on HttpException catch (e) {
-      throw IppException('Принтер розірвав з\'єднання: ${e.message}');
+      throw IppException(l10n.printerDroppedConnection(e.message));
     } finally {
       client.close(force: true);
     }
@@ -76,12 +77,12 @@ class IppClient {
           version = v;
           return r;
         }
-        lastError = IppException('Принтер відповів помилкою ${r.statusHex}');
+        lastError = IppException(l10n.printerErrorStatus(r.statusHex));
       } on IppException catch (e) {
         lastError = e;
       }
     }
-    throw lastError ?? IppException('Невідома помилка IPP');
+    throw lastError ?? IppException(l10n.unknownIppError);
   }
 
   Future<IppResponse> printJob({

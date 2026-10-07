@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import '../l10n/l10n.dart';
 
 enum ScanColor {
   color('RGB24'),
@@ -42,7 +43,7 @@ class ScannerCaps {
     int first(String tag, int fallback) => int.tryParse(all(tag).firstOrNull ?? '') ?? fallback;
     final res = {for (final r in all('XResolution')) int.tryParse(r)}.whereType<int>().toList()..sort();
     return ScannerCaps(
-      model: all('MakeAndModel').firstOrNull ?? 'Сканер',
+      model: all('MakeAndModel').firstOrNull ?? l10n.scannerDefaultName,
       colorModes: all('ColorMode'),
       resolutions: res,
       formats: {...all('DocumentFormat'), ...all('DocumentFormatExt')}.toList(),
@@ -119,9 +120,9 @@ class EsclClient {
       final data = await resp.fold<BytesBuilder>(BytesBuilder(copy: false), (b, c) => b..add(c)).timeout(timeout);
       return (resp.statusCode, data.takeBytes(), resp.headers);
     } on TimeoutException {
-      throw ScanException('Сканер не відповідає');
+      throw ScanException(l10n.scannerNotResponding);
     } on SocketException catch (e) {
-      throw ScanException('Немає з\'єднання зі сканером: ${e.osError?.message ?? e.message}');
+      throw ScanException(l10n.noConnectionScanner(e.osError?.message ?? e.message));
     } finally {
       client.close(force: true);
     }
@@ -144,11 +145,11 @@ class EsclClient {
   /// видаляється — інакше сканер лишається «зайнятим». [onPage] — після кожної сторінки.
   Future<List<Uint8List>> scan(String settingsXml, {void Function(int pages)? onPage}) async {
     final (status, _, headers) = await _send('POST', _uri('ScanJobs'), body: settingsXml);
-    if (status == 503) throw ScanException('Сканер зайнятий — спробуй за хвилину');
-    if (status == 409) throw ScanException('Сканер не підтримує такі налаштування (або в подавачі нема паперу)');
-    if (status != 201) throw ScanException('Сканер відхилив завдання (HTTP $status)');
+    if (status == 503) throw ScanException(l10n.scannerBusy);
+    if (status == 409) throw ScanException(l10n.scannerUnsupportedSettings);
+    if (status != 201) throw ScanException(l10n.scannerRejected(status));
     final location = headers.value(HttpHeaders.locationHeader);
-    if (location == null) throw ScanException('Сканер не повідомив адресу завдання');
+    if (location == null) throw ScanException(l10n.scannerNoJobAddress);
     // Лише шлях: хост у Location буває ім'ям, яке телефон не розв'яже (напр. ім'я домашнього сервера).
     final job = Uri.parse(location).path;
     final pages = <Uint8List>[];
@@ -163,10 +164,10 @@ class EsclClient {
           continue;
         }
         if (st == 404) {
-          if (pages.isEmpty) throw ScanException('Сканер нічого не віддав (у подавачі нема паперу?)');
+          if (pages.isEmpty) throw ScanException(l10n.scannerNothing);
           return pages;
         }
-        if (st != 503 || ++waits > 60) throw ScanException('Сканер не віддав сторінку (HTTP $st)');
+        if (st != 503 || ++waits > 60) throw ScanException(l10n.scannerNoPage(st));
         await Future<void>.delayed(const Duration(seconds: 1)); // ще сканує
       }
     } catch (_) {

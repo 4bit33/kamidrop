@@ -10,6 +10,7 @@ import '../ipp/ipp_client.dart';
 import '../platform/platform_bridge.dart';
 import '../printing/capabilities.dart';
 import '../scan/escl.dart';
+import '../l10n/l10n.dart';
 
 /// Принтер, знайдений у локальній мережі через mDNS (DNS-SD `_ipp._tcp` / `_ipps._tcp`).
 class DiscoveredPrinter {
@@ -249,7 +250,7 @@ class PrinterDiscovery extends ChangeNotifier {
         if (!seen.contains(p.id) && !p.loading) refreshCapabilities(p);
       }
     } catch (e) {
-      lastError = 'Пошук у мережі не вдався: $e';
+      lastError = l10n.searchFailed('$e');
     } finally {
       client.stop();
       _scanning = false;

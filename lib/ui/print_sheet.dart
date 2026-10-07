@@ -16,6 +16,7 @@ import '../theme.dart';
 import 'collage_editor.dart';
 import 'layout_editor.dart';
 import 'page_pager.dart';
+import '../l10n/l10n.dart';
 
 Future<void> showPrintSheet(
   BuildContext context,
@@ -107,14 +108,14 @@ class _PrintSheetState extends State<PrintSheet> {
             children: [
               ListTile(
                 leading: const Icon(Icons.photo_library_outlined, color: Kami.shu),
-                title: const Text('Галерея'),
-                subtitle: const Text('Фото й зображення'),
+                title: Text(l10n.gallery),
+                subtitle: Text(l10n.galleryHint),
                 onTap: () => Navigator.pop(context, true),
               ),
               ListTile(
                 leading: const Icon(Icons.folder_outlined, color: Kami.shu),
-                title: const Text('Файли'),
-                subtitle: const Text('PDF і зображення з провідника'),
+                title: Text(l10n.files),
+                subtitle: Text(l10n.filesHint),
                 onTap: () => Navigator.pop(context, false),
               ),
             ],
@@ -128,7 +129,7 @@ class _PrintSheetState extends State<PrintSheet> {
       try {
         paths = await PlatformBridge.pickImages();
       } catch (e) {
-        if (mounted) setState(() => _openError = 'Не вдалося взяти фото з галереї: $e');
+        if (mounted) setState(() => _openError = l10n.galleryFailed('$e'));
         return;
       }
       await _openPaths(paths);
@@ -138,9 +139,9 @@ class _PrintSheetState extends State<PrintSheet> {
   }
 
   Future<void> _pickFile() async {
-    final files = await openFiles(acceptedTypeGroups: const [
+    final files = await openFiles(acceptedTypeGroups: [
       XTypeGroup(
-        label: 'PDF і зображення',
+        label: l10n.pdfAndImages,
         extensions: PrintSource.allExtensions,
         mimeTypes: ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp'],
       ),
@@ -218,8 +219,8 @@ class _PrintSheetState extends State<PrintSheet> {
     if (Platform.isAndroid) {
       paths = await PlatformBridge.pickImages();
     } else {
-      final files = await openFiles(acceptedTypeGroups: const [
-        XTypeGroup(label: 'Зображення', extensions: PrintSource.imageExtensions),
+      final files = await openFiles(acceptedTypeGroups: [
+        XTypeGroup(label: l10n.images, extensions: PrintSource.imageExtensions),
       ]);
       paths = [for (final f in files) f.path];
     }
@@ -320,7 +321,7 @@ class _PrintSheetState extends State<PrintSheet> {
   void _start(Stream<PrintProgress> Function(PrintCancel cancel) print) {
     final cancel = _cancel = PrintCancel();
     final stream = print(cancel);
-    setState(() => _progress = const PrintProgress(PrintStage.preparing, 'Готуюсь…'));
+    setState(() => _progress = PrintProgress(PrintStage.preparing, l10n.preparing));
     _sub?.cancel();
     _sub = stream.listen((p) {
       if (mounted) setState(() => _progress = p);
@@ -385,17 +386,17 @@ class _PrintSheetState extends State<PrintSheet> {
               const SizedBox(height: 16),
               if (caps == null) ...[
                 if (p.loading)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 24),
-                    child: Center(child: Text('Отримую можливості принтера…')),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    child: Center(child: Text(l10n.gettingCaps)),
                   )
                 else ...[
-                  Text(p.error ?? 'Можливості принтера невідомі',
+                  Text(p.error ?? l10n.capsUnknown,
                       style: theme.textTheme.bodyMedium?.copyWith(color: Kami.shu)),
                   const SizedBox(height: 12),
                   OutlinedButton(
                     onPressed: () => widget.discovery.refreshCapabilities(p),
-                    child: const Text('Спробувати ще раз'),
+                    child: Text(l10n.tryAgain),
                   ),
                 ],
               ] else ...[
@@ -441,9 +442,9 @@ class _PrintSheetState extends State<PrintSheet> {
                     enabled: !_busy,
                     onChanged: (_) => _onPagesChanged(),
                     decoration: InputDecoration(
-                      labelText: 'Сторінки',
-                      hintText: 'усі ${source.pageCount}, або напр. 1-3, 5',
-                      errorText: pages == null ? 'Номери від 1 до ${source.pageCount}' : null,
+                      labelText: l10n.pagesLabel,
+                      hintText: l10n.pagesHint(source.pageCount),
+                      errorText: pages == null ? l10n.pagesError(source.pageCount) : null,
                       border: const OutlineInputBorder(),
                       isDense: true,
                     ),
@@ -452,21 +453,21 @@ class _PrintSheetState extends State<PrintSheet> {
                 const SizedBox(height: 8),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Колір'),
-                  subtitle: caps.supportsColor ? null : const Text('Цей принтер друкує лише чорно-біле'),
+                  title: Text(l10n.color),
+                  subtitle: caps.supportsColor ? null : Text(l10n.onlyBw),
                   value: caps.supportsColor && (_color ?? false),
                   onChanged: caps.supportsColor && !_busy ? (v) => setState(() => _color = v) : null,
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Двосторонній друк'),
-                  subtitle: caps.supportsDuplex ? null : const Text('Не підтримується'),
+                  title: Text(l10n.duplexPrint),
+                  subtitle: caps.supportsDuplex ? null : Text(l10n.notSupported),
                   value: caps.supportsDuplex && _duplex,
                   onChanged: caps.supportsDuplex && !_busy ? (v) => setState(() => _duplex = v) : null,
                 ),
                 Row(
                   children: [
-                    const Expanded(child: Text('Копії')),
+                    Expanded(child: Text(l10n.copies)),
                     IconButton(
                       onPressed: _copies > 1 && !_busy ? () => setState(() => _copies--) : null,
                       icon: const Icon(Icons.remove),
@@ -492,8 +493,8 @@ class _PrintSheetState extends State<PrintSheet> {
                         },
                   icon: const Icon(Icons.print),
                   label: Text(source == null
-                      ? 'Спершу вибери файл'
-                      : 'Друкувати ${pages == null ? '' : _pagesLabel(pages.length)}'),
+                      ? l10n.pickFileFirst
+                      : (pages == null ? l10n.print : l10n.printPages(pages.length))),
                   style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
                 ),
                 TextButton(
@@ -504,10 +505,10 @@ class _PrintSheetState extends State<PrintSheet> {
                           _start((c) => printTestPage(p, _options(), cancel: c));
                         },
                   style: TextButton.styleFrom(foregroundColor: Kami.stone),
-                  child: const Text('Тестова сторінка'),
+                  child: Text(l10n.testPage),
                 ),
                 if (!caps.supportsUrf)
-                  Text('Принтер не підтримує AirPrint-растр', style: theme.textTheme.bodySmall),
+                  Text(l10n.noUrfShort, style: theme.textTheme.bodySmall),
                 if (_layoutHint) _LayoutHint(onAnswer: _answerLayoutHint),
                 if (_progress != null) ...[
                   const SizedBox(height: 8),
@@ -520,7 +521,7 @@ class _PrintSheetState extends State<PrintSheet> {
                             ? null
                             : () => setState(() => _cancel!.cancel()),
                         icon: const Icon(Icons.close, size: 18),
-                        label: Text(_cancel?.isCancelled ?? false ? 'Скасовую…' : 'Скасувати'),
+                        label: Text(_cancel?.isCancelled ?? false ? l10n.cancelling : l10n.cancel),
                         style: TextButton.styleFrom(foregroundColor: Kami.shu),
                       ),
                     ),
@@ -533,13 +534,6 @@ class _PrintSheetState extends State<PrintSheet> {
     );
   }
 
-  static String _pagesLabel(int n) {
-    final mod10 = n % 10, mod100 = n % 100;
-    final word = mod10 == 1 && mod100 != 11
-        ? 'сторінку'
-        : (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14) ? 'сторінки' : 'сторінок');
-    return '$n $word';
-  }
 }
 
 class _FileCard extends StatelessWidget {
@@ -591,14 +585,14 @@ class _FileCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      s?.name ?? (opening ? 'Відкриваю…' : 'Вибрати файл'),
+                      s?.name ?? (opening ? l10n.opening : l10n.chooseFile),
                       style: theme.textTheme.titleMedium,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      error ?? (s != null ? '${s.pageCount} стор. · натисни, щоб змінити' : 'PDF або зображення'),
+                      error ?? (s != null ? l10n.pagesTapToChange(s.pageCount) : l10n.pdfOrImage),
                       style: theme.textTheme.bodySmall?.copyWith(color: error != null ? Kami.shu : null),
                     ),
                   ],
@@ -668,21 +662,19 @@ class _LayoutHint extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Ти вже вдруге ставиш той самий макет. Запам\'ятовувати його, щоб наступного разу '
-              'він був одразу? Це можна змінити в налаштуваннях.',
-              style: theme.textTheme.bodySmall),
+          Text(l10n.layoutHint, style: theme.textTheme.bodySmall),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
               TextButton(
                 onPressed: () => onAnswer(false),
                 style: TextButton.styleFrom(foregroundColor: Kami.stone),
-                child: const Text('Ні'),
+                child: Text(l10n.no),
               ),
               TextButton(
                 onPressed: () => onAnswer(true),
                 style: TextButton.styleFrom(foregroundColor: Kami.shu),
-                child: const Text('Увімкнути'),
+                child: Text(l10n.turnOn),
               ),
             ],
           ),
@@ -728,11 +720,11 @@ class _CollageCard extends StatelessWidget {
       index: index,
       onIndexChanged: onIndexChanged,
       thumbFor: thumbFor,
-      unit: 'Аркуш',
+      unit: l10n.unitSheet,
       trailing: TextButton.icon(
         onPressed: onEdit,
         icon: const Icon(Icons.edit_outlined, size: 18),
-        label: const Text('Редагувати аркуші'),
+        label: Text(l10n.editSheets),
       ),
     );
   }

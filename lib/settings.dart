@@ -36,6 +36,7 @@ class KamiSettings {
     this.scanDpi,
     this.scanFeeder,
     this.scanFormat,
+    this.language = 'system',
   })  : printers = printers ?? {},
         layoutStreak = layoutStreak ?? {};
 
@@ -49,6 +50,7 @@ class KamiSettings {
   int? scanDpi;
   bool? scanFeeder; // останній раз сканували з подавача
   String? scanFormat; // pdf / jpeg / png — у чому зберігати й ділитися
+  String language; // 'system' / 'uk' / 'en'
 
   String? lastPrinterId;
   final Map<String, PrinterPrefs> printers;
@@ -139,6 +141,7 @@ class KamiSettings {
         'scanDpi': scanDpi,
         'scanFeeder': scanFeeder,
         'scanFormat': scanFormat,
+        'language': language,
         'lastPrinterId': lastPrinterId,
         'printers': printers.map((id, p) => MapEntry(id, p.toJson())),
         'documentLayout': documentLayout == null ? null : layoutToJson(documentLayout!),
@@ -164,6 +167,7 @@ class KamiSettings {
       scanDpi: j['scanDpi'] as int?,
       scanFeeder: j['scanFeeder'] as bool?,
       scanFormat: j['scanFormat'] as String?,
+      language: j['language'] as String? ?? 'system',
       layoutStreak: (j['layoutStreak'] as Map<String, dynamic>? ?? {}).map((k, v) => MapEntry(k, v as int)),
     );
   }

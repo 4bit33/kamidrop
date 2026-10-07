@@ -29,7 +29,7 @@
             </intent-filter>
 
             <!-- «Поділитися → KamiDrop» для PDF і зображень -->
-            <intent-filter android:label="Друкувати (KamiDrop)">
+            <intent-filter android:label="@string/share_print">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="application/pdf" />
@@ -37,7 +37,7 @@
             </intent-filter>
 
             <!-- «Відкрити за допомогою → KamiDrop» для PDF -->
-            <intent-filter android:label="Друкувати (KamiDrop)">
+            <intent-filter android:label="@string/share_print">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:scheme="content" />

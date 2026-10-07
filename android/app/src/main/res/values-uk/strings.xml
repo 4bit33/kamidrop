@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="share_print">Друкувати (KamiDrop)</string>
+    <!-- Назва фото з галереї (справжню Photo Picker ховає) — за датою зйомки -->
+    <string name="photo">Фото</string>
+</resources>

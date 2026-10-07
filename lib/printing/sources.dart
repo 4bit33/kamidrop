@@ -11,6 +11,7 @@ import 'package:pdfrx/pdfrx.dart';
 import 'collage.dart';
 import 'compose.dart';
 import 'test_page.dart';
+import '../l10n/l10n.dart';
 
 class SourceException implements Exception {
   final String message;
@@ -61,7 +62,7 @@ abstract class PrintSource {
     final ext = path.contains('.') ? path.split('.').last.toLowerCase() : '';
     if (ext == 'pdf') return PdfSource.open(path);
     if (imageExtensions.contains(ext)) return ImageSource.open(path);
-    throw SourceException('Формат «.$ext» поки не підтримується. Можна PDF або зображення.');
+    throw SourceException(l10n.formatNotSupported(ext));
   }
 }
 
@@ -79,7 +80,7 @@ class PdfSource extends PrintSource {
       final doc = await PdfDocument.openFile(path);
       return PdfSource._(doc, _basename(path));
     } catch (e) {
-      throw SourceException('Не вдалося відкрити PDF: $e');
+      throw SourceException(l10n.pdfOpenFailed('$e'));
     }
   }
 
@@ -106,7 +107,7 @@ class PdfSource extends PrintSource {
       fullHeight: height.toDouble(),
       backgroundColor: 0xFFFFFFFF,
     );
-    if (img == null) throw SourceException('Не вдалося відрендерити сторінку ${index + 1}');
+    if (img == null) throw SourceException(l10n.pageRenderFailed(index + 1));
     try {
       return SourcePixels(
         data: Uint8List.fromList(img.pixels), // копія: пам'ять PdfImage звільняється в dispose()
@@ -141,7 +142,7 @@ class ImageSource extends PrintSource {
       buffer.dispose();
       return ImageSource._(bytes, _basename(path), w, h);
     } catch (e) {
-      throw SourceException('Не вдалося прочитати зображення: $e');
+      throw SourceException(l10n.imageReadFailed('$e'));
     }
   }
 
@@ -212,7 +213,7 @@ class CollageSource extends PrintSource {
   final Collage collage;
 
   @override
-  String get name => 'Аркуш із ${_photosLabel(collage.sheets.fold(0, (n, s) => n + s.length))}';
+  String get name => l10n.collageName(collage.sheets.fold(0, (n, s) => n + s.length));
 
   @override
   int get pageCount => collage.sheets.length;
@@ -249,7 +250,6 @@ class CollageSource extends PrintSource {
   }
 }
 
-String _photosLabel(int n) => '$n фото'; // «фото» не відмінюється
 
 // Top-level, щоб замикання для Isolate.run не захоплювало зайвого.
 Future<Uint8List> _composeCollageInIsolate(int width, int height, List<PlacedPhoto> placed) =>

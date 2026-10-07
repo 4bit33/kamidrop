@@ -10,6 +10,7 @@ import 'compose.dart';
 import 'sources.dart';
 import 'test_page.dart';
 import 'urf.dart';
+import '../l10n/l10n.dart';
 
 enum PrintStage { preparing, rendering, sending, waiting, done, failed, cancelled }
 
@@ -36,7 +37,7 @@ class PrintCancel {
   }
 }
 
-const _cancelledBeforeSend = PrintProgress(PrintStage.cancelled, 'Скасовано — на принтер нічого не надіслано');
+PrintProgress get _cancelledBeforeSend => PrintProgress(PrintStage.cancelled, l10n.cancelledBeforeSend);
 
 class PrintOptions {
   final bool color;
@@ -45,14 +46,14 @@ class PrintOptions {
   const PrintOptions({this.color = false, this.duplex = false, this.copies = 1});
 }
 
-const _jobStates = {
-  3: 'У черзі принтера',
-  4: 'Утримується принтером',
-  5: 'Друкується…',
-  6: 'Принтер зупинився',
-  7: 'Скасовано',
-  8: 'Перервано принтером',
-  9: 'Готово',
+Map<int, String> get _jobStates => {
+  3: l10n.jobPending,
+  4: l10n.jobHeld,
+  5: l10n.jobProcessing,
+  6: l10n.jobStopped,
+  7: l10n.jobCanceled,
+  8: l10n.jobAborted,
+  9: l10n.done,
 };
 
 String _userName() => Platform.environment['USER'] ?? Platform.environment['USERNAME'] ?? 'kamidrop';
@@ -61,7 +62,7 @@ String _userName() => Platform.environment['USER'] ?? Platform.environment['USER
 Stream<PrintProgress> printTestPage(DiscoveredPrinter printer, PrintOptions options, {PrintCancel? cancel}) async* {
   final caps = printer.capabilities;
   if (caps == null) {
-    yield const PrintProgress(PrintStage.failed, 'Можливості принтера ще не відомі');
+    yield PrintProgress(PrintStage.failed, l10n.capsUnknownYet);
     return;
   }
   final color = options.color && caps.supportsColor;
@@ -85,16 +86,16 @@ Stream<PrintProgress> printDocument(
   cancel ??= PrintCancel();
   final caps = printer.capabilities;
   if (caps == null) {
-    yield const PrintProgress(PrintStage.failed, 'Можливості принтера ще не відомі');
+    yield PrintProgress(PrintStage.failed, l10n.capsUnknownYet);
     return;
   }
   if (!caps.supportsUrf) {
-    yield const PrintProgress(PrintStage.failed, 'Принтер не приймає AirPrint-растр (image/urf)');
+    yield PrintProgress(PrintStage.failed, l10n.noUrf);
     return;
   }
   final selected = pages ?? List<int>.generate(source.pageCount, (i) => i);
   if (selected.isEmpty) {
-    yield const PrintProgress(PrintStage.failed, 'Не вибрано жодної сторінки');
+    yield PrintProgress(PrintStage.failed, l10n.noPagesSelected);
     return;
   }
 
@@ -120,7 +121,7 @@ Stream<PrintProgress> printDocument(
       }
       yield PrintProgress(
         PrintStage.rendering,
-        'Готую сторінку ${i + 1} з ${selected.length}…',
+        l10n.preparingPage(i + 1, selected.length),
         fraction: i / selected.length,
       );
       final lay = computeLayout(source.pageSize(selected[i]), layout,
@@ -141,7 +142,7 @@ Stream<PrintProgress> printDocument(
       encoded.add(await _encodeBlankInIsolate(pageW: pageW, pageH: pageH, dpi: dpi, color: color, duplex: urfDuplex));
     }
   } catch (e) {
-    yield PrintProgress(PrintStage.failed, 'Помилка підготовки: $e');
+    yield PrintProgress(PrintStage.failed, l10n.prepareError('$e'));
     return;
   }
 
@@ -157,7 +158,7 @@ Stream<PrintProgress> printDocument(
     yield _cancelledBeforeSend;
     return;
   }
-  yield PrintProgress(PrintStage.sending, 'Надсилаю ${(document.length / 1e6).toStringAsFixed(1)} МБ…');
+  yield PrintProgress(PrintStage.sending, l10n.sendingMb(decimal(document.length / 1e6, 1)));
   final client = printer.client();
   int? jobId;
   try {
@@ -188,7 +189,7 @@ Stream<PrintProgress> printDocument(
     );
     if (!r.isSuccess) {
       final msg = r.first<String>('status-message');
-      yield PrintProgress(PrintStage.failed, 'Принтер відхилив завдання (${r.statusHex}${msg != null ? ', $msg' : ''})');
+      yield PrintProgress(PrintStage.failed, l10n.printerRejected('${r.statusHex}${msg != null ? ', $msg' : ''}'));
       return;
     }
     jobId = r.first<int>('job-id');
@@ -198,7 +199,7 @@ Stream<PrintProgress> printDocument(
   }
 
   if (jobId == null) {
-    yield const PrintProgress(PrintStage.done, 'Надіслано');
+    yield PrintProgress(PrintStage.done, l10n.sent);
     return;
   }
 
@@ -210,7 +211,7 @@ Stream<PrintProgress> printDocument(
   String? last;
   while (DateTime.now().isBefore(deadline)) {
     if (cancel.isCancelled) {
-      yield const PrintProgress(PrintStage.waiting, 'Скасовую…');
+      yield PrintProgress(PrintStage.waiting, l10n.cancelling);
       yield await _cancelJob(client, jobId);
       return;
     }
@@ -224,26 +225,25 @@ Stream<PrintProgress> printDocument(
       if (r == null) {
         silentSince ??= DateTime.now();
         if (DateTime.now().difference(silentSince) < const Duration(minutes: 2)) {
-          if (last != _silentText) yield const PrintProgress(PrintStage.waiting, _silentText);
+          if (last != _silentText) yield PrintProgress(PrintStage.waiting, _silentText);
           last = _silentText;
           await _pause(const Duration(seconds: 3), cancelled);
           continue;
         }
       }
       if (await _restartedSince(client, sentAt)) {
-        yield const PrintProgress(
-            PrintStage.failed, 'Принтер перезавантажився під час друку — завдання, найпевніше, втрачено');
+        yield PrintProgress(PrintStage.failed, l10n.rebootedDuringPrint);
       } else if (r == null) {
-        yield const PrintProgress(PrintStage.done, 'Принтер перестав відповідати — перевір, чи надрукувалось');
+        yield PrintProgress(PrintStage.done, l10n.stoppedResponding);
       } else {
-        yield const PrintProgress(PrintStage.done, 'Надіслано (статус завдання недоступний)');
+        yield PrintProgress(PrintStage.done, l10n.sentNoStatus);
       }
       return;
     }
     silentSince = null;
-    final text = _jobStates[state] ?? 'Стан: $state';
+    final text = _jobStates[state] ?? l10n.jobState('$state');
     if (state == 9) {
-      yield const PrintProgress(PrintStage.done, 'Готово');
+      yield PrintProgress(PrintStage.done, l10n.done);
       return;
     }
     if (state == 7 || state == 8) {
@@ -256,10 +256,10 @@ Stream<PrintProgress> printDocument(
     }
     await _pause(const Duration(seconds: 2), cancelled);
   }
-  yield const PrintProgress(PrintStage.done, 'Надіслано (принтер ще працює)');
+  yield PrintProgress(PrintStage.done, l10n.sentStillPrinting);
 }
 
-const _silentText = 'Принтер не відповідає, чекаю…';
+String get _silentText => l10n.printerSilentWaiting;
 
 /// Пауза між опитуваннями, що обривається натисканням «Скасувати».
 Future<void> _pause(Duration d, Future<bool> cancelled) => Future.any([Future<bool>.delayed(d, () => false), cancelled]);
@@ -268,16 +268,16 @@ Future<PrintProgress> _cancelJob(IppClient client, int jobId) async {
   try {
     final r = await client.cancelJob(jobId, userName: _userName());
     if (r.isSuccess) {
-      return const PrintProgress(PrintStage.cancelled, 'Завдання скасовано. Аркуш, що вже друкувався, може вийти');
+      return PrintProgress(PrintStage.cancelled, l10n.jobCancelledMayPrint);
     }
     // 0x0507 — job-not-cancelable: принтер уже все зробив або завдання вже скасоване.
     if (r.status == 0x0507) {
-      return const PrintProgress(PrintStage.failed, 'Запізно — принтер уже завершив це завдання');
+      return PrintProgress(PrintStage.failed, l10n.tooLateToCancel);
     }
     final msg = r.first<String>('status-message');
-    return PrintProgress(PrintStage.failed, 'Принтер не скасував завдання (${r.statusHex}${msg != null ? ', $msg' : ''})');
+    return PrintProgress(PrintStage.failed, l10n.printerDidNotCancel('${r.statusHex}${msg != null ? ', $msg' : ''}'));
   } catch (e) {
-    return PrintProgress(PrintStage.failed, 'Не вдалося скасувати: $e');
+    return PrintProgress(PrintStage.failed, l10n.cancelFailed('$e'));
   }
 }
 

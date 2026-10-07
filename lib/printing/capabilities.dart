@@ -1,6 +1,7 @@
 import '../ipp/ipp.dart';
 import 'compose.dart';
 import 'urf.dart';
+import '../l10n/l10n.dart';
 
 /// Витратний матеріал (картридж/тонер) з атрибутів marker-*.
 class Marker {
@@ -132,7 +133,7 @@ class PrinterCapabilities {
     final colorModes = r.all<String>('print-color-mode-supported');
 
     return PrinterCapabilities(
-      model: r.first<String>('printer-make-and-model') ?? txt['ty'] ?? 'Невідомий принтер',
+      model: r.first<String>('printer-make-and-model') ?? txt['ty'] ?? l10n.unknownPrinter,
       state: state,
       stateMessage: r.first<String>('printer-state-message'),
       upTime: r.first<int>('printer-up-time'),

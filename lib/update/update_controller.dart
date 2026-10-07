@@ -3,13 +3,14 @@ import 'package:flutter/foundation.dart';
 import '../platform/platform_bridge.dart';
 import '../settings.dart';
 import 'updater.dart';
+import '../l10n/l10n.dart';
 
 enum UpdateState { idle, checking, upToDate, available, downloading, installing, error }
 
 /// Стан оновлення для банера на головному екрані й екрана налаштувань.
 class UpdateController extends ChangeNotifier {
   UpdateController(this.settings) {
-    PlatformBridge.listenUpdateErrors((msg) => _fail('Не вдалося встановити: $msg'));
+    PlatformBridge.listenUpdateErrors((msg) => _fail(l10n.updateInstallFailed(msg)));
   }
 
   KamiSettings settings;
@@ -49,7 +50,7 @@ class UpdateController extends ChangeNotifier {
       dismissed = false;
       _set(found == null ? UpdateState.upToDate : UpdateState.available);
     } catch (e) {
-      _fail('Не вдалося перевірити оновлення: $e');
+      _fail(l10n.updateCheckFailed('$e'));
     }
   }
 
@@ -65,14 +66,14 @@ class UpdateController extends ChangeNotifier {
       });
       final r = await PlatformBridge.installApk(path);
       if (r == 'permission') {
-        message = 'Дозволь KamiDrop встановлювати застосунки й натисни «Оновити» ще раз';
+        message = l10n.updateAllowInstall;
         _set(UpdateState.available);
       } else {
         message = null;
         _set(UpdateState.installing);
       }
     } catch (e) {
-      _fail('Не вдалося завантажити оновлення: $e');
+      _fail(l10n.updateDownloadFailed('$e'));
     }
   }
 

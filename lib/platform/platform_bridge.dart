@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import '../l10n/l10n.dart';
+
 /// Міст до нативного коду Android (MainActivity.kt): системний пошук принтерів (NsdManager),
 /// multicast lock, файли з «Поділитися → KamiDrop» і вибір фото. На інших платформах — нічого не робить.
 class PlatformBridge {
@@ -84,7 +86,7 @@ class PlatformBridge {
   /// Вибір одного чи кількох фото системним Photo Picker. Шляхи до копій у кеші; порожньо — нічого не вибрали.
   static Future<List<String>> pickImages() async {
     if (!_isAndroid) return const [];
-    final paths = await _channel.invokeListMethod<String>('pickImages');
+    final paths = await _channel.invokeListMethod<String>('pickImages', {'photoWord': l10n.photo});
     return paths ?? const [];
   }
 

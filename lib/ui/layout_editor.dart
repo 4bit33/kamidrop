@@ -7,6 +7,7 @@ import '../printing/sources.dart';
 import '../printing/test_page.dart';
 import '../theme.dart';
 import 'page_pager.dart';
+import '../l10n/l10n.dart';
 
 /// Мініредактор макета: превʼю аркуша + орієнтація, розмір, поля, розташування.
 class LayoutEditor extends StatelessWidget {
@@ -74,36 +75,36 @@ class LayoutEditor extends StatelessWidget {
           thumbFor: thumbFor ?? (i) => source.preview(i, maxSide: 140),
         ),
         const SizedBox(height: 4),
-        Text('Орієнтація', style: label),
+        Text(l10n.orientation, style: label),
         const SizedBox(height: 6),
         SegmentedButton<LayoutOrientation>(
           showSelectedIcon: false,
-          segments: const [
-            ButtonSegment(value: LayoutOrientation.auto, label: Text('Авто')),
-            ButtonSegment(value: LayoutOrientation.portrait, label: Text('Книжкова')),
-            ButtonSegment(value: LayoutOrientation.landscape, label: Text('Альбомна')),
+          segments: [
+            ButtonSegment(value: LayoutOrientation.auto, label: Text(l10n.orientationAuto)),
+            ButtonSegment(value: LayoutOrientation.portrait, label: Text(l10n.portrait)),
+            ButtonSegment(value: LayoutOrientation.landscape, label: Text(l10n.landscape)),
           ],
           selected: {layout.orientation},
           onSelectionChanged: enabled ? (s) => set(layout.copyWith(orientation: s.first)) : null,
         ),
         const SizedBox(height: 14),
-        Text('Розмір', style: label),
+        Text(l10n.size, style: label),
         const SizedBox(height: 6),
         Wrap(
           spacing: 6,
           runSpacing: 6,
           children: [
-            chip('Вписати', photo == null && layout.scale == LayoutScale.fit,
+            chip(l10n.fit, photo == null && layout.scale == LayoutScale.fit,
                 () => set(layout.copyWith(scale: LayoutScale.fit, clearPhotoSize: true))),
             if (source.isDocument)
               chip('100 %', photo == null && layout.scale == LayoutScale.actual,
                   () => set(layout.copyWith(scale: LayoutScale.actual, clearPhotoSize: true))),
-            chip('Заповнити', photo == null && layout.scale == LayoutScale.fill,
+            chip(l10n.fill, photo == null && layout.scale == LayoutScale.fill,
                 () => set(layout.copyWith(scale: LayoutScale.fill, clearPhotoSize: true))),
             if (!source.isDocument)
               for (final ps in PhotoSize.all)
                 chip(ps.label, photo?.label == ps.label, () => set(layout.copyWith(photoSize: ps))),
-            chip('Свій', isCustom, () => set(layout.copyWith(scale: LayoutScale.custom, clearPhotoSize: true))),
+            chip(l10n.custom, isCustom, () => set(layout.copyWith(scale: LayoutScale.custom, clearPhotoSize: true))),
           ],
         ),
         if (isCustom)
@@ -123,29 +124,29 @@ class LayoutEditor extends StatelessWidget {
             ],
           ),
         const SizedBox(height: 14),
-        Text('Поля', style: label),
+        Text(l10n.margins, style: label),
         const SizedBox(height: 6),
         Wrap(
           spacing: 6,
           children: [
             if (canBorderless)
-              chip('До краю', layout.borderless, () => set(layout.copyWith(marginMm: 0, borderless: true))),
+              chip(l10n.edgeToEdge, layout.borderless, () => set(layout.copyWith(marginMm: 0, borderless: true))),
             // «Мінімальні» — впритул до полів, які принтер не друкує.
-            for (final (mm, text) in const [(0.0, 'Мінімальні'), (5.0, '5 мм'), (10.0, '10 мм')])
+            for (final (mm, text) in [(0.0, l10n.minimal), (5.0, l10n.mm(5)), (10.0, l10n.mm(10))])
               chip(text, layout.marginMm == mm && !(layout.borderless && canBorderless),
                   () => set(layout.copyWith(marginMm: mm, borderless: false))),
           ],
         ),
         if (photo != null || isCustom) ...[
           const SizedBox(height: 14),
-          Text('Розташування', style: label),
+          Text(l10n.placement, style: label),
           const SizedBox(height: 6),
           Wrap(
             spacing: 6,
             children: [
-              chip('По центру', layout.anchor == LayoutAnchor.center,
+              chip(l10n.centered, layout.anchor == LayoutAnchor.center,
                   () => set(layout.copyWith(anchor: LayoutAnchor.center))),
-              chip('Вгорі', layout.anchor == LayoutAnchor.top, () => set(layout.copyWith(anchor: LayoutAnchor.top))),
+              chip(l10n.top, layout.anchor == LayoutAnchor.top, () => set(layout.copyWith(anchor: LayoutAnchor.top))),
             ],
           ),
         ],

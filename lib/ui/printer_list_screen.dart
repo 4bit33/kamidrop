@@ -9,6 +9,7 @@ import '../theme.dart';
 import 'print_sheet.dart';
 import 'scan_screen.dart';
 import 'settings_screen.dart';
+import '../l10n/l10n.dart';
 
 class PrinterListScreen extends StatefulWidget {
   const PrinterListScreen({
@@ -151,8 +152,8 @@ class _PrinterListScreenState extends State<PrinterListScreen> {
                         child: ListTile(
                           leading: const Icon(Icons.document_scanner_outlined, color: Kami.stone),
                           title: Text(sc.name, overflow: TextOverflow.ellipsis),
-                          subtitle: Text('Сканер · ${sc.host}'),
-                          trailing: TextButton(onPressed: () => _openScan(sc), child: const Text('Сканувати')),
+                          subtitle: Text(l10n.scannerAt(sc.host)),
+                          trailing: TextButton(onPressed: () => _openScan(sc), child: Text(l10n.scan)),
                         ),
                       ),
                     ),
@@ -162,7 +163,7 @@ class _PrinterListScreenState extends State<PrinterListScreen> {
                     child: TextButton.icon(
                       onPressed: () => _addByIp(context),
                       icon: const Icon(Icons.add, size: 18),
-                      label: const Text('Додати принтер за IP-адресою'),
+                      label: Text(l10n.addPrinterByIp),
                       style: TextButton.styleFrom(foregroundColor: Kami.stone),
                     ),
                   ),
@@ -203,7 +204,7 @@ class _AddPrinterDialogState extends State<_AddPrinterDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       backgroundColor: Kami.paper,
-      title: const Text('Принтер за IP'),
+      title: Text(l10n.printerByIp),
       content: TextField(
         controller: _controller,
         autofocus: true,
@@ -212,8 +213,8 @@ class _AddPrinterDialogState extends State<_AddPrinterDialog> {
         onSubmitted: (v) => Navigator.pop(context, v.trim()),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Скасувати')),
-        FilledButton(onPressed: () => Navigator.pop(context, _controller.text.trim()), child: const Text('Додати')),
+        TextButton(onPressed: () => Navigator.pop(context), child: Text(l10n.cancel)),
+        FilledButton(onPressed: () => Navigator.pop(context, _controller.text.trim()), child: Text(l10n.add)),
       ],
     );
   }
@@ -245,7 +246,7 @@ class _Header extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('KamiDrop', style: theme.textTheme.headlineMedium),
-              Text(scanning ? 'Шукаю принтери поруч…' : 'Принтери поруч', style: theme.textTheme.bodySmall),
+              Text(scanning ? l10n.searchingNearby : l10n.printersNearby, style: theme.textTheme.bodySmall),
             ],
           ),
         ),
@@ -255,11 +256,11 @@ class _Header extends StatelessWidget {
             child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Kami.stone)),
           )
         else
-          IconButton(onPressed: onRefresh, icon: const Icon(Icons.refresh, color: Kami.stone), tooltip: 'Шукати знову'),
+          IconButton(onPressed: onRefresh, icon: const Icon(Icons.refresh, color: Kami.stone), tooltip: l10n.searchAgain),
         IconButton(
           onPressed: onSettings,
           icon: const Icon(Icons.tune, color: Kami.stone),
-          tooltip: 'Налаштування',
+          tooltip: l10n.settings,
         ),
       ],
     );
@@ -293,11 +294,11 @@ class _SharedFileBanner extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(name, style: theme.textTheme.titleMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
-                Text('Вибери принтер нижче', style: theme.textTheme.bodySmall),
+                Text(l10n.pickPrinterBelow, style: theme.textTheme.bodySmall),
               ],
             ),
           ),
-          IconButton(onPressed: onClose, icon: const Icon(Icons.close, color: Kami.stone), tooltip: 'Прибрати файл'),
+          IconButton(onPressed: onClose, icon: const Icon(Icons.close, color: Kami.stone), tooltip: l10n.removeFile),
         ],
       ),
     );
@@ -319,11 +320,10 @@ class _EmptyState extends StatelessWidget {
         children: [
           Icon(Icons.print_outlined, size: 40, color: Kami.stone.withValues(alpha: 0.6)),
           const SizedBox(height: 12),
-          Text(scanning ? 'Шукаю принтери…' : 'Принтерів поки не видно', style: Theme.of(context).textTheme.titleMedium),
+          Text(scanning ? l10n.searchingPrinters : l10n.noPrintersYet, style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 6),
           Text(
-            error ?? 'Переконайся, що принтер увімкнений і в тій самій Wi-Fi мережі.\n'
-                'Потягни список донизу, щоб шукати знову.',
+            error ?? l10n.noPrintersHint,
             style: small,
             textAlign: TextAlign.center,
           ),
@@ -362,7 +362,7 @@ class PrinterCard extends StatelessWidget {
                   if (isLast)
                     Padding(
                       padding: const EdgeInsets.only(left: 8),
-                      child: Text('останній', style: theme.textTheme.bodySmall?.copyWith(color: Kami.shu)),
+                      child: Text(l10n.lastUsed, style: theme.textTheme.bodySmall?.copyWith(color: Kami.shu)),
                     ),
                   const Icon(Icons.chevron_right, color: Kami.stone),
                 ],
@@ -377,7 +377,7 @@ class PrinterCard extends StatelessWidget {
               if (caps != null && caps.recentlyRestarted)
                 Padding(
                   padding: const EdgeInsets.only(left: 20, top: 4),
-                  child: Text('Щойно ввімкнувся — може ще прогріватися',
+                  child: Text(l10n.justPoweredOn,
                       style: theme.textTheme.bodySmall?.copyWith(color: Kami.kincha)),
                 ),
               if (printer.loading && caps == null)
@@ -396,8 +396,8 @@ class PrinterCard extends StatelessWidget {
                   spacing: 6,
                   runSpacing: 6,
                   children: [
-                    Chip(label: Text(caps.supportsColor ? 'Колір' : 'Ч/Б')),
-                    if (caps.supportsDuplex) const Chip(label: Text('Двосторонній')),
+                    Chip(label: Text(caps.supportsColor ? l10n.color : l10n.blackWhiteShort)),
+                    if (caps.supportsDuplex) Chip(label: Text(l10n.duplex)),
                     Chip(label: Text('${caps.defaultDpi} dpi')),
                   ],
                 ),
@@ -412,7 +412,7 @@ class PrinterCard extends StatelessWidget {
                   child: TextButton.icon(
                     onPressed: onScan,
                     icon: const Icon(Icons.document_scanner_outlined, size: 18),
-                    label: const Text('Сканувати'),
+                    label: Text(l10n.scan),
                   ),
                 ),
             ],
@@ -512,9 +512,9 @@ class _UpdateBanner extends StatelessWidget {
     final theme = Theme.of(context);
     final info = updates.info!;
     final (text, busy) = switch (updates.state) {
-      UpdateState.downloading => ('Завантажую версію ${info.version}… ${(updates.progress * 100).round()} %', true),
-      UpdateState.installing => ('Встановлюю версію ${info.version}…', true),
-      _ => ('Є нова версія ${info.version}', false),
+      UpdateState.downloading => (l10n.updateDownloading(info.version, (updates.progress * 100).round()), true),
+      UpdateState.installing => (l10n.updateInstalling(info.version), true),
+      _ => (l10n.updateAvailable(info.version), false),
     };
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
@@ -535,7 +535,7 @@ class _UpdateBanner extends StatelessWidget {
                 IconButton(
                   onPressed: updates.dismiss,
                   icon: const Icon(Icons.close, size: 18, color: Kami.stone),
-                  tooltip: 'Пізніше',
+                  tooltip: l10n.later,
                 ),
             ],
           ),
@@ -557,7 +557,7 @@ class _UpdateBanner extends StatelessWidget {
           if (!busy)
             Align(
               alignment: Alignment.centerRight,
-              child: TextButton(onPressed: updates.install, child: const Text('Оновити')),
+              child: TextButton(onPressed: updates.install, child: Text(l10n.update)),
             ),
         ],
       ),

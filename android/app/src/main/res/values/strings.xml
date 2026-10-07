@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Пункт у меню «Поділитися» / «Відкрити за допомогою» (англійська — типова) -->
+    <string name="share_print">Print (KamiDrop)</string>
+    <!-- Назва фото з галереї (справжню Photo Picker ховає) — за датою зйомки -->
+    <string name="photo">Photo</string>
+</resources>
