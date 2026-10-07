@@ -439,6 +439,42 @@ abstract class L10n {
   /// **'Версія {version}'**
   String versionLabel(String version);
 
+  /// No description provided for @printServiceTitle.
+  ///
+  /// In uk, this message translates to:
+  /// **'Друк з інших застосунків'**
+  String get printServiceTitle;
+
+  /// No description provided for @printServiceSubtitle.
+  ///
+  /// In uk, this message translates to:
+  /// **'Увімкни KamiDrop у системних налаштуваннях друку — і принтери з\'являться в «Друк» у Chrome, Фото, Gmail. Типову службу там можна вимкнути.'**
+  String get printServiceSubtitle;
+
+  /// No description provided for @printServiceHintTitle.
+  ///
+  /// In uk, this message translates to:
+  /// **'Друк з будь-якого застосунку'**
+  String get printServiceHintTitle;
+
+  /// No description provided for @printServiceHintBody.
+  ///
+  /// In uk, this message translates to:
+  /// **'Тепер принтери KamiDrop є в системному «Друк» — у Chrome, Фото, Gmail тощо. Щоб принтери не дублювались, вимкни в налаштуваннях друку «Стандартний сервіс друку».'**
+  String get printServiceHintBody;
+
+  /// No description provided for @printSettings.
+  ///
+  /// In uk, this message translates to:
+  /// **'Налаштування друку'**
+  String get printSettings;
+
+  /// No description provided for @gotIt.
+  ///
+  /// In uk, this message translates to:
+  /// **'Зрозуміло'**
+  String get gotIt;
+
   /// No description provided for @language.
   ///
   /// In uk, this message translates to:

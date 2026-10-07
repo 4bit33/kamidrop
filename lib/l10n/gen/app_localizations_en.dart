@@ -210,6 +210,26 @@ class L10nEn extends L10n {
   }
 
   @override
+  String get printServiceTitle => 'Printing from other apps';
+
+  @override
+  String get printServiceSubtitle =>
+      'Turn on KamiDrop in the system print settings — its printers will show up under “Print” in Chrome, Photos, Gmail. You can turn off the default service there.';
+
+  @override
+  String get printServiceHintTitle => 'Print from any app';
+
+  @override
+  String get printServiceHintBody =>
+      'KamiDrop printers are now in the system “Print” dialog — in Chrome, Photos, Gmail and more. To avoid duplicate printers, turn off the “Default Print Service” in the print settings.';
+
+  @override
+  String get printSettings => 'Print settings';
+
+  @override
+  String get gotIt => 'Got it';
+
+  @override
   String get language => 'Language';
 
   @override

@@ -73,6 +73,12 @@
   "@updateOnMainScreen": {"placeholders": {"version": {"type": "String"}}},
   "versionLabel": "Версія {version}",
   "@versionLabel": {"placeholders": {"version": {"type": "String"}}},
+  "printServiceTitle": "Друк з інших застосунків",
+  "printServiceSubtitle": "Увімкни KamiDrop у системних налаштуваннях друку — і принтери з'являться в «Друк» у Chrome, Фото, Gmail. Типову службу там можна вимкнути.",
+  "printServiceHintTitle": "Друк з будь-якого застосунку",
+  "printServiceHintBody": "Тепер принтери KamiDrop є в системному «Друк» — у Chrome, Фото, Gmail тощо. Щоб принтери не дублювались, вимкни в налаштуваннях друку «Стандартний сервіс друку».",
+  "printSettings": "Налаштування друку",
+  "gotIt": "Зрозуміло",
   "language": "Мова",
   "languageSystem": "Як у системі",
 

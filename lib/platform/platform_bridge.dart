@@ -115,6 +115,12 @@ class PlatformBridge {
     return _channel.invokeMethod<String>('saveToDownloads', {'path': path, 'name': name, 'mime': mime});
   }
 
+  /// Системні налаштування друку: там вмикають службу KamiDrop і вимикають типову.
+  static Future<void> openPrintSettings() async {
+    if (!_isAndroid) return;
+    await _channel.invokeMethod<void>('openPrintSettings');
+  }
+
   /// Помилки встановлення оновлення, що приходять від системи пізніше.
   static void listenUpdateErrors(void Function(String message) onError) {
     if (!_isAndroid) return;

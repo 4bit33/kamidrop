@@ -6,12 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.net.Uri
-import android.net.nsd.NsdManager
-import android.net.nsd.NsdServiceInfo
-import android.net.wifi.WifiManager
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import android.os.Environment
 import android.provider.MediaStore
 import android.provider.Settings
@@ -21,16 +16,13 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
-import java.net.Inet4Address
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
  * Нативна частина KamiDrop:
- *  - пошук принтерів через системний NsdManager (DNS-SD). Android не дає звичайним
- *    застосункам надсилати mDNS-запити самотужки, а NsdManager робить це від імені системи;
- *  - multicast lock (запасний варіант для Dart-реалізації mDNS);
+ *  - міст до пошуку принтерів і сканерів (NsdDiscovery — спільний зі службою друку);
  *  - прийом файлів через «Поділитися → KamiDrop» і «Відкрити за допомогою»;
  *  - вибір фото з галереї (системний Photo Picker, одне або кілька);
  *  - версія застосунку й встановлення оновлення (PackageInstaller);
@@ -38,16 +30,11 @@ import java.util.Locale
  */
 class MainActivity : FlutterActivity() {
     private var channel: MethodChannel? = null
-    private var multicastLock: WifiManager.MulticastLock? = null
     private var pendingSharedPath: String? = null
     private var pendingPick: MethodChannel.Result? = null
     private var pickPhotoWord: String? = null // «Фото» / «Photo» — мовою застосунку
 
-    private val mainHandler = Handler(Looper.getMainLooper())
-    private var nsd: NsdManager? = null
-    private val discoveryListeners = mutableListOf<NsdManager.DiscoveryListener>()
-    private val resolveQueue = ArrayDeque<NsdServiceInfo>()
-    private var resolvingToken: Any? = null
+    private val nsdDiscovery by lazy { NsdDiscovery(this) { found -> channel?.invokeMethod("printerFound", found) } }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -56,19 +43,19 @@ class MainActivity : FlutterActivity() {
             setMethodCallHandler { call, result ->
                 when (call.method) {
                     "startPrinterDiscovery" -> {
-                        startDiscovery()
+                        nsdDiscovery.start()
                         result.success(null)
                     }
                     "stopPrinterDiscovery" -> {
-                        stopDiscovery()
+                        nsdDiscovery.stop()
                         result.success(null)
                     }
                     "acquireMulticastLock" -> {
-                        acquireMulticastLock()
+                        nsdDiscovery.acquireMulticastLock()
                         result.success(null)
                     }
                     "releaseMulticastLock" -> {
-                        releaseMulticastLock()
+                        nsdDiscovery.releaseMulticastLock()
                         result.success(null)
                     }
                     "takeSharedFile" -> {
@@ -80,6 +67,10 @@ class MainActivity : FlutterActivity() {
                         pickImages(result)
                     }
                     "appInfo" -> result.success(appInfo())
+                    "openPrintSettings" -> {
+                        startActivity(Intent(Settings.ACTION_PRINT_SETTINGS))
+                        result.success(null)
+                    }
                     "installApk" -> result.success(installApk(call.arguments as String))
                     "shareFiles" -> {
                         shareFiles(call.argument<List<String>>("paths")!!, call.argument<String>("mime")!!)
@@ -132,158 +123,11 @@ class MainActivity : FlutterActivity() {
 
     override fun onDestroy() {
         if (current === this) current = null
-        stopDiscovery()
-        releaseMulticastLock()
+        nsdDiscovery.stop()
+        nsdDiscovery.releaseMulticastLock()
         super.onDestroy()
     }
 
-    // ------------------------------------------------------------------ пошук принтерів (NSD)
-
-    /** Перезапускає пошук: кожен перезапуск змушує систему заново опитати мережу. */
-    private fun startDiscovery() {
-        stopDiscovery()
-        val manager = getSystemService(Context.NSD_SERVICE) as NsdManager
-        nsd = manager
-        // _uscan._tcp — сканери eSCL (Brother сам, Xerox — через шлюз AirSane на сервері).
-        for (type in listOf("_ipp._tcp", "_ipps._tcp", "_uscan._tcp")) {
-            val listener = object : NsdManager.DiscoveryListener {
-                override fun onDiscoveryStarted(serviceType: String) {}
-                override fun onDiscoveryStopped(serviceType: String) {}
-                override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {}
-                override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {}
-                override fun onServiceLost(serviceInfo: NsdServiceInfo) {}
-                override fun onServiceFound(serviceInfo: NsdServiceInfo) {
-                    mainHandler.post { enqueueResolve(serviceInfo) }
-                }
-            }
-            try {
-                manager.discoverServices(type, NsdManager.PROTOCOL_DNS_SD, listener)
-                discoveryListeners.add(listener)
-            } catch (_: Exception) {
-            }
-        }
-    }
-
-    private fun stopDiscovery() {
-        val manager = nsd ?: return
-        for (l in discoveryListeners) {
-            try {
-                manager.stopServiceDiscovery(l)
-            } catch (_: Exception) {
-            }
-        }
-        discoveryListeners.clear()
-        resolveQueue.clear()
-        resolvingToken = null
-    }
-
-    private fun enqueueResolve(info: NsdServiceInfo) {
-        if (resolveQueue.any { it.serviceName == info.serviceName && it.serviceType == info.serviceType }) return
-        resolveQueue.addLast(info)
-        resolveNext()
-    }
-
-    /** Розв'язуємо сервіси по одному: старі версії NsdManager не вміють кілька одночасно. */
-    private fun resolveNext() {
-        if (resolvingToken != null) return
-        val info = resolveQueue.removeFirstOrNull() ?: return
-        val manager = nsd ?: return
-        val token = Any()
-        resolvingToken = token
-
-        if (Build.VERSION.SDK_INT >= 34) {
-            val callback = object : NsdManager.ServiceInfoCallback {
-                override fun onServiceInfoCallbackRegistrationFailed(errorCode: Int) = resolveDone(token)
-                override fun onServiceUpdated(serviceInfo: NsdServiceInfo) {
-                    report(serviceInfo)
-                    try {
-                        manager.unregisterServiceInfoCallback(this)
-                    } catch (_: Exception) {
-                        resolveDone(token)
-                    }
-                }
-                override fun onServiceLost() {}
-                override fun onServiceInfoCallbackUnregistered() = resolveDone(token)
-            }
-            try {
-                manager.registerServiceInfoCallback(info, mainExecutor, callback)
-                // Якщо принтер так і не відповів — не блокуємо чергу.
-                mainHandler.postDelayed({
-                    if (resolvingToken === token) {
-                        try {
-                            manager.unregisterServiceInfoCallback(callback)
-                        } catch (_: Exception) {
-                        }
-                        resolveDone(token)
-                    }
-                }, 5000)
-            } catch (_: Exception) {
-                resolveDone(token)
-            }
-        } else {
-            @Suppress("DEPRECATION")
-            manager.resolveService(info, object : NsdManager.ResolveListener {
-                override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
-                    mainHandler.post { resolveDone(token) }
-                }
-
-                override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
-                    mainHandler.post {
-                        report(serviceInfo)
-                        resolveDone(token)
-                    }
-                }
-            })
-        }
-    }
-
-    private fun resolveDone(token: Any) {
-        if (resolvingToken !== token) return
-        resolvingToken = null
-        resolveNext()
-    }
-
-    private fun report(info: NsdServiceInfo) {
-        val host: String? = if (Build.VERSION.SDK_INT >= 34) {
-            val addrs = info.hostAddresses
-            (addrs.firstOrNull { it is Inet4Address } ?: addrs.firstOrNull())?.hostAddress
-        } else {
-            @Suppress("DEPRECATION")
-            info.host?.hostAddress
-        }
-        if (host == null) return
-        val txt = HashMap<String, String>()
-        for ((k, v) in info.attributes) {
-            txt[k.lowercase()] = if (v != null) String(v, Charsets.UTF_8) else ""
-        }
-        channel?.invokeMethod(
-            "printerFound",
-            mapOf(
-                "name" to info.serviceName,
-                "host" to host,
-                "port" to info.port,
-                "tls" to (info.serviceType?.contains("_ipps") == true),
-                "scanner" to (info.serviceType?.contains("_uscan") == true),
-                "txt" to txt,
-            ),
-        )
-    }
-
-    // ------------------------------------------------------------------ multicast lock
-
-    private fun acquireMulticastLock() {
-        if (multicastLock?.isHeld == true) return
-        val wifi = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-        multicastLock = wifi.createMulticastLock("kamidrop-mdns").apply {
-            setReferenceCounted(false)
-            acquire()
-        }
-    }
-
-    private fun releaseMulticastLock() {
-        multicastLock?.let { if (it.isHeld) it.release() }
-        multicastLock = null
-    }
 
     // ------------------------------------------------------------------ скани
 

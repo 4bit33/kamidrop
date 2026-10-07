@@ -1,9 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../settings.dart';
 import '../theme.dart';
 import '../update/update_controller.dart';
 import '../l10n/l10n.dart';
+import '../platform/platform_bridge.dart';
 
 /// Налаштування застосунку. Кожна зміна зберігається одразу.
 class SettingsScreen extends StatefulWidget {
@@ -50,6 +53,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           const Divider(height: 8),
+          if (Platform.isAndroid) ...[
+            ListTile(
+              leading: const Icon(Icons.print_outlined, color: Kami.shu),
+              title: Text(l10n.printServiceTitle),
+              subtitle: Text(l10n.printServiceSubtitle),
+              trailing: const Icon(Icons.open_in_new, size: 18, color: Kami.stone),
+              onTap: PlatformBridge.openPrintSettings,
+            ),
+            const Divider(height: 8),
+          ],
           SwitchListTile(
             title: Text(l10n.autoOpenTitle),
             subtitle: Text(l10n.autoOpenSubtitle),

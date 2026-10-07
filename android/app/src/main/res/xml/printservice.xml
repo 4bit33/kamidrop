@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Служба друку KamiDrop: «Додати принтер» у системних налаштуваннях відкриває застосунок (там є «за IP»). -->
+<print-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:addPrintersActivity="dev.fourbit.kamidrop.MainActivity" />

@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../discovery/discovery.dart';
+import '../platform/platform_bridge.dart';
 import '../printing/capabilities.dart';
 import '../scan/escl.dart';
 import '../settings.dart';
@@ -82,6 +85,12 @@ class _PrinterListScreenState extends State<PrinterListScreen> {
     });
   }
 
+  void _dismissPrintServiceHint({bool openSettings = false}) {
+    setState(() => widget.settings.printServiceHintShown = true);
+    widget.settings.save();
+    if (openSettings) PlatformBridge.openPrintSettings();
+  }
+
   /// Сканування; «Друк» зі скану кладе PDF як файл із «Поділитися» — далі вибираєш принтер.
   Future<void> _openScan(ScannerRef scanner) => Navigator.of(context).push(MaterialPageRoute<void>(
         builder: (_) =>
@@ -126,6 +135,10 @@ class _PrinterListScreenState extends State<PrinterListScreen> {
                   const SizedBox(height: 28),
                   if (widget.updates.bannerVisible) ...[
                     _UpdateBanner(updates: widget.updates),
+                    const SizedBox(height: 16),
+                  ],
+                  if (Platform.isAndroid && !widget.settings.printServiceHintShown) ...[
+                    _PrintServiceBanner(onDone: _dismissPrintServiceHint),
                     const SizedBox(height: 16),
                   ],
                   if (shared != null) ...[
@@ -559,6 +572,54 @@ class _UpdateBanner extends StatelessWidget {
               alignment: Alignment.centerRight,
               child: TextButton(onPressed: updates.install, child: Text(l10n.update)),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Один раз після оновлення: принтери KamiDrop тепер і в системному «Друк».
+class _PrintServiceBanner extends StatelessWidget {
+  const _PrintServiceBanner({required this.onDone});
+
+  final void Function({bool openSettings}) onDone;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+      decoration: BoxDecoration(
+        color: Kami.shu.withValues(alpha: 0.06),
+        border: Border.all(color: Kami.shu.withValues(alpha: 0.3)),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.print_outlined, color: Kami.shu, size: 20),
+              const SizedBox(width: 10),
+              Expanded(child: Text(l10n.printServiceHintTitle, style: theme.textTheme.titleSmall)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Text(l10n.printServiceHintBody, style: theme.textTheme.bodySmall),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: () => onDone(),
+                style: TextButton.styleFrom(foregroundColor: Kami.stone),
+                child: Text(l10n.gotIt),
+              ),
+              TextButton(onPressed: () => onDone(openSettings: true), child: Text(l10n.printSettings)),
+            ],
+          ),
         ],
       ),
     );

@@ -27,6 +27,8 @@ over eSCL (AirScan).
   adjust the crop, hold a photo and swipe with another finger to move it to another sheet.
 - **Scanning** from the glass or the document feeder: color, grayscale or black & white, 75–600 dpi;
   save as **PDF** (one file), **JPEG** or **PNG**, share, or print right away (a copier).
+- **Print from any app**: KamiDrop is an Android print service — its printers show up in the system
+  "Print" dialog of Chrome, Photos, Gmail and other apps.
 - **"Share → KamiDrop"** from the gallery, files or any app.
 - **Updates itself** from GitHub releases (checked once a day; installs only when you tap).
 - **English and Ukrainian** — picked from the system language or chosen in Settings.
@@ -58,6 +60,7 @@ Almost everything is implemented in plain Dart, without printing or scanning lib
 | `lib/scan/escl.dart` | **eSCL** scanning client: capabilities, multi-page jobs from the feeder |
 | `lib/scan/pdf_writer.dart` | A tiny **PDF writer**: scanner JPEGs without re-encoding, 1-bit pages for black & white |
 | `lib/discovery/` | Printer and scanner discovery: Android `NsdManager`, mDNS elsewhere; memory of printers |
+| `lib/printservice/` + `KamiPrintService.kt` | **Android print service**: a headless Flutter engine runs the same discovery and print pipeline for the system "Print" dialog |
 | `lib/update/` | Self-update from GitHub releases via Android `PackageInstaller` |
 
 Things learned the hard way are worth a look if you write your own client: for example, a Brother
@@ -83,8 +86,8 @@ Translations live in `lib/l10n/app_uk.arb` (source) and `lib/l10n/app_en.arb`.
 
 ## Roadmap
 
-What's done and what's next — see [ROADMAP.md](ROADMAP.md). Up next: an **Android print service**, so KamiDrop
-printers show up in the system "Print" dialog of any app (Chrome, Photos, Gmail…).
+What's done and what's next — see [ROADMAP.md](ROADMAP.md). Up next: **"More options"** inside the system print
+dialog (fit / fill / 100 %, edge-to-edge) and finding printers on isolated networks.
 
 ## License
 

@@ -210,6 +210,26 @@ class L10nUk extends L10n {
   }
 
   @override
+  String get printServiceTitle => 'Друк з інших застосунків';
+
+  @override
+  String get printServiceSubtitle =>
+      'Увімкни KamiDrop у системних налаштуваннях друку — і принтери з\'являться в «Друк» у Chrome, Фото, Gmail. Типову службу там можна вимкнути.';
+
+  @override
+  String get printServiceHintTitle => 'Друк з будь-якого застосунку';
+
+  @override
+  String get printServiceHintBody =>
+      'Тепер принтери KamiDrop є в системному «Друк» — у Chrome, Фото, Gmail тощо. Щоб принтери не дублювались, вимкни в налаштуваннях друку «Стандартний сервіс друку».';
+
+  @override
+  String get printSettings => 'Налаштування друку';
+
+  @override
+  String get gotIt => 'Зрозуміло';
+
+  @override
   String get language => 'Мова';
 
   @override

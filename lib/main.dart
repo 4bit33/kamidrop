@@ -5,10 +5,19 @@ import 'package:pdfrx/pdfrx.dart';
 import 'discovery/discovery.dart';
 import 'l10n/l10n.dart';
 import 'platform/platform_bridge.dart';
+import 'printservice/print_service_host.dart';
 import 'settings.dart';
 import 'update/update_controller.dart';
 import 'theme.dart';
 import 'ui/printer_list_screen.dart';
+
+/// Точка входу служби друку Android (KamiPrintService.kt запускає її у фоновому Flutter без вікна).
+@pragma('vm:entry-point')
+Future<void> printServiceMain() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  pdfrxFlutterInitialize();
+  await PrintServiceHost().start();
+}
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();

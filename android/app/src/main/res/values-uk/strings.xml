@@ -3,4 +3,7 @@
     <string name="share_print">Друкувати (KamiDrop)</string>
     <!-- Назва фото з галереї (справжню Photo Picker ховає) — за датою зйомки -->
     <string name="photo">Фото</string>
+    <!-- Служба друку в системних налаштуваннях -->
+    <string name="print_service_label">KamiDrop</string>
+    <string name="print_no_document">Застосунок не передав документ для друку</string>
 </resources>

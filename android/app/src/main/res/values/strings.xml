@@ -4,4 +4,7 @@
     <string name="share_print">Print (KamiDrop)</string>
     <!-- Назва фото з галереї (справжню Photo Picker ховає) — за датою зйомки -->
     <string name="photo">Photo</string>
+    <!-- Служба друку в системних налаштуваннях -->
+    <string name="print_service_label">KamiDrop</string>
+    <string name="print_no_document">The app did not provide a document to print</string>
 </resources>

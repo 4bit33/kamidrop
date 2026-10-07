@@ -44,6 +44,17 @@
                 <data android:mimeType="application/pdf" />
             </intent-filter>
         </activity>
+        <!-- Служба друку: принтери KamiDrop у системному діалозі «Друк» будь-якого застосунку -->
+        <service
+            android:name=".KamiPrintService"
+            android:label="@string/print_service_label"
+            android:permission="android.permission.BIND_PRINT_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.printservice.PrintService" />
+            </intent-filter>
+            <meta-data android:name="android.printservice" android:resource="@xml/printservice" />
+        </service>
         <!-- «Поділитися» сканом: тимчасовий доступ до файлу з cache/scans -->
         <provider
             android:name="androidx.core.content.FileProvider"
