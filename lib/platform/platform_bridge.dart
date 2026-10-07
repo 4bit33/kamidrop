@@ -101,10 +101,10 @@ class PlatformBridge {
   static Future<String> installApk(String path) async =>
       await _channel.invokeMethod<String>('installApk', path) ?? 'started';
 
-  /// Системне «Поділитися» файлом (Android). Файл має лежати в cache/scans.
-  static Future<void> shareFile(String path, String mime) async {
+  /// Системне «Поділитися» одним чи кількома файлами (Android). Файли мають лежати в cache/scans.
+  static Future<void> shareFiles(List<String> paths, String mime) async {
     if (!_isAndroid) return;
-    await _channel.invokeMethod<void>('shareFile', {'path': path, 'mime': mime});
+    await _channel.invokeMethod<void>('shareFiles', {'paths': paths, 'mime': mime});
   }
 
   /// Копія в «Завантаження/KamiDrop». Повертає шлях для людини або null, якщо не вийшло.

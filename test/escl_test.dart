@@ -6,8 +6,8 @@ import 'package:kamidrop/scan/escl.dart';
 
 /// Фейковий eSCL-сканер: перший NextDocument — 503 (ще сканує), далі сторінка, далі 404.
 class _FakeScanner {
-  _FakeScanner({this.postStatus = 201, this.docStatus = 200});
-  final int postStatus, docStatus;
+  _FakeScanner({this.postStatus = 201, this.docStatus = 200, this.pages = 1});
+  final int postStatus, docStatus, pages;
   final log = <String>[];
   String? postedBody;
   bool? chunked;
@@ -25,9 +25,10 @@ class _FakeScanner {
         req.response.statusCode = postStatus;
         if (postStatus == 201) req.response.headers.set('Location', 'http://127.0.0.1:${server.port}/eSCL/ScanJobs/42');
       } else if (req.uri.path.endsWith('NextDocument')) {
-        final n = _next++;
-        req.response.statusCode = n == 0 ? 503 : (n == 1 ? docStatus : 404);
-        if (n == 1 && docStatus == 200) req.response.add([0xFF, 0xD8, 0xFF, 0xD9]);
+        final n = _next++; // 0 — ще сканує, 1..pages — сторінки, далі 404
+        final page = n >= 1 && n <= pages;
+        req.response.statusCode = n == 0 ? 503 : (page ? docStatus : 404);
+        if (page && docStatus == 200) req.response.add([0xFF, 0xD8, n, 0xFF, 0xD9]);
       }
       await req.response.close();
     });
@@ -58,8 +59,10 @@ void main() {
   test('Сканування: чекає, поки сканер готовий, і закриває завдання', () async {
     final fake = _FakeScanner();
     await fake.start();
-    final data = await EsclClient(host: '127.0.0.1', port: fake.server.port).scanPage('<x/>');
-    expect(data, [0xFF, 0xD8, 0xFF, 0xD9]);
+    final pages = await EsclClient(host: '127.0.0.1', port: fake.server.port).scan('<x/>');
+    expect(pages, [
+      [0xFF, 0xD8, 1, 0xFF, 0xD9]
+    ]);
     expect(fake.chunked, isFalse, reason: 'Brother не приймає chunked — тільки з Content-Length');
     expect(fake.log, [
       'POST /eSCL/ScanJobs',
@@ -73,7 +76,7 @@ void main() {
   test('Помилка сторінки — завдання видаляється', () async {
     final fake = _FakeScanner(docStatus: 500);
     await fake.start();
-    await expectLater(EsclClient(host: '127.0.0.1', port: fake.server.port).scanPage('<x/>'),
+    await expectLater(EsclClient(host: '127.0.0.1', port: fake.server.port).scan('<x/>'),
         throwsA(isA<ScanException>()));
     expect(fake.log.last, 'DELETE /eSCL/ScanJobs/42');
     await fake.server.close(force: true);
@@ -82,8 +85,46 @@ void main() {
   test('Непідтримувані налаштування — зрозуміла помилка', () async {
     final fake = _FakeScanner(postStatus: 409);
     await fake.start();
-    await expectLater(EsclClient(host: '127.0.0.1', port: fake.server.port).scanPage('<x/>'),
+    await expectLater(EsclClient(host: '127.0.0.1', port: fake.server.port).scan('<x/>'),
         throwsA(isA<ScanException>().having((e) => e.message, 'message', contains('не підтримує'))));
     await fake.server.close(force: true);
+  });
+
+  test('Подавач: усі аркуші одним завданням, корінь шляху з mDNS', () async {
+    final fake = _FakeScanner(pages: 3);
+    await fake.start();
+    final seen = <int>[];
+    final pages =
+        await EsclClient(host: '127.0.0.1', port: fake.server.port, root: '/eSCL/').scan('<x/>', onPage: seen.add);
+    expect(pages.map((p) => p[2]), [1, 2, 3]);
+    expect(seen, [1, 2, 3]);
+    expect(fake.log.where((l) => l.endsWith('NextDocument')).length, 5, reason: '503, 3 сторінки, 404');
+    await fake.server.close(force: true);
+  });
+
+  test('Порожній подавач (одразу 404) — зрозуміла помилка', () async {
+    final fake = _FakeScanner(pages: 0);
+    await fake.start();
+    await expectLater(EsclClient(host: '127.0.0.1', port: fake.server.port).scan('<x/>'),
+        throwsA(isA<ScanException>().having((e) => e.message, 'message', contains('нема паперу'))));
+    await fake.server.close(force: true);
+  });
+
+  test('Сканер шлюзу (WSD …) прив\'язується до свого принтера, а не до чужого', () {
+    bool m(String scanner, String host, String printer, String phost) => scannerMatchesPrinter(
+        scannerName: scanner, scannerHost: host, printerName: printer, printerHost: phost);
+    const xeroxScan = 'WSD Xerox WorkCentre 3225 (XRX000000000000)';
+    expect(m(xeroxScan, '10.0.0.224', 'Xerox WorkCentre 3225 (XRX000000000000)', '10.0.0.78'), isTrue);
+    expect(m(xeroxScan, '10.0.0.224', 'Brother DCP-J572DW', '10.0.0.114'), isFalse);
+    expect(m('Brother DCP-J572DW', '10.0.0.114', 'Brother DCP-J572DW', '10.0.0.114'), isTrue, reason: 'та сама адреса');
+    expect(m('HP', '10.0.0.5', 'HP LaserJet', '10.0.0.6'), isFalse, reason: 'надто коротка назва — не вгадуємо');
+  });
+
+  test('Можливості шлюзу AirSane (Xerox через WSD): скло й подавач, 75–300 dpi', () {
+    final caps = ScannerCaps.parse(File('test/fixtures/escl_caps_airsane_xerox3225.xml').readAsStringSync());
+    expect(caps.platen, isTrue);
+    expect(caps.adf, isTrue);
+    expect(caps.resolutions, [75, 100, 150, 200, 300]);
+    expect(caps.colorModes, containsAll(['RGB24', 'Grayscale8']));
   });
 }

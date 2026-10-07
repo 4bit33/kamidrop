@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../discovery/discovery.dart';
 import '../printing/capabilities.dart';
+import '../scan/escl.dart';
 import '../settings.dart';
 import '../update/update_controller.dart';
 import '../theme.dart';
@@ -81,8 +82,9 @@ class _PrinterListScreenState extends State<PrinterListScreen> {
   }
 
   /// Сканування; «Друк» зі скану кладе PDF як файл із «Поділитися» — далі вибираєш принтер.
-  Future<void> _openScan(DiscoveredPrinter p) => Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) => ScanScreen(printer: p, settings: widget.settings, onPrint: (path) => sharedFile.value = path),
+  Future<void> _openScan(ScannerRef scanner) => Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) =>
+            ScanScreen(scanner: scanner, settings: widget.settings, onPrint: (path) => sharedFile.value = path),
       ));
 
   Future<void> _openSettings() async {
@@ -139,7 +141,19 @@ class _PrinterListScreenState extends State<PrinterListScreen> {
                             p.id == widget.settings.lastPrinterId &&
                             printers.length > 1,
                         onTap: () => _openSheet(p),
-                        onScan: p.scanner == null ? null : () => _openScan(p),
+                        onScan: discovery.scannerFor(p) == null ? null : () => _openScan(discovery.scannerFor(p)!),
+                      ),
+                    ),
+                  for (final sc in discovery.standaloneScanners)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Card(
+                        child: ListTile(
+                          leading: const Icon(Icons.document_scanner_outlined, color: Kami.stone),
+                          title: Text(sc.name, overflow: TextOverflow.ellipsis),
+                          subtitle: Text('Сканер · ${sc.host}'),
+                          trailing: TextButton(onPressed: () => _openScan(sc), child: const Text('Сканувати')),
+                        ),
                       ),
                     ),
                   const SizedBox(height: 4),

@@ -34,6 +34,8 @@ class KamiSettings {
     this.lastUpdateCheck,
     this.scanColor,
     this.scanDpi,
+    this.scanFeeder,
+    this.scanFormat,
   })  : printers = printers ?? {},
         layoutStreak = layoutStreak ?? {};
 
@@ -45,6 +47,8 @@ class KamiSettings {
   DateTime? lastUpdateCheck;
   String? scanColor; // останні налаштування сканування (ScanColor.name), пам'ятаємо завжди
   int? scanDpi;
+  bool? scanFeeder; // останній раз сканували з подавача
+  String? scanFormat; // pdf / jpeg / png — у чому зберігати й ділитися
 
   String? lastPrinterId;
   final Map<String, PrinterPrefs> printers;
@@ -133,6 +137,8 @@ class KamiSettings {
         'lastUpdateCheck': lastUpdateCheck?.toIso8601String(),
         'scanColor': scanColor,
         'scanDpi': scanDpi,
+        'scanFeeder': scanFeeder,
+        'scanFormat': scanFormat,
         'lastPrinterId': lastPrinterId,
         'printers': printers.map((id, p) => MapEntry(id, p.toJson())),
         'documentLayout': documentLayout == null ? null : layoutToJson(documentLayout!),
@@ -156,6 +162,8 @@ class KamiSettings {
       lastUpdateCheck: DateTime.tryParse(j['lastUpdateCheck'] as String? ?? ''),
       scanColor: j['scanColor'] as String?,
       scanDpi: j['scanDpi'] as int?,
+      scanFeeder: j['scanFeeder'] as bool?,
+      scanFormat: j['scanFormat'] as String?,
       layoutStreak: (j['layoutStreak'] as Map<String, dynamic>? ?? {}).map((k, v) => MapEntry(k, v as int)),
     );
   }

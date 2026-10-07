@@ -77,8 +77,8 @@ class MainActivity : FlutterActivity() {
                     "pickImages" -> pickImages(result)
                     "appInfo" -> result.success(appInfo())
                     "installApk" -> result.success(installApk(call.arguments as String))
-                    "shareFile" -> {
-                        shareFile(call.argument<String>("path")!!, call.argument<String>("mime")!!)
+                    "shareFiles" -> {
+                        shareFiles(call.argument<List<String>>("paths")!!, call.argument<String>("mime")!!)
                         result.success(null)
                     }
                     "saveToDownloads" -> result.success(
@@ -140,7 +140,8 @@ class MainActivity : FlutterActivity() {
         stopDiscovery()
         val manager = getSystemService(Context.NSD_SERVICE) as NsdManager
         nsd = manager
-        for (type in listOf("_ipp._tcp", "_ipps._tcp")) {
+        // _uscan._tcp — сканери eSCL (Brother сам, Xerox — через шлюз AirSane на сервері).
+        for (type in listOf("_ipp._tcp", "_ipps._tcp", "_uscan._tcp")) {
             val listener = object : NsdManager.DiscoveryListener {
                 override fun onDiscoveryStarted(serviceType: String) {}
                 override fun onDiscoveryStopped(serviceType: String) {}
@@ -258,6 +259,7 @@ class MainActivity : FlutterActivity() {
                 "host" to host,
                 "port" to info.port,
                 "tls" to (info.serviceType?.contains("_ipps") == true),
+                "scanner" to (info.serviceType?.contains("_uscan") == true),
                 "txt" to txt,
             ),
         )
@@ -281,13 +283,16 @@ class MainActivity : FlutterActivity() {
 
     // ------------------------------------------------------------------ скани
 
-    private fun shareFile(path: String, mime: String) {
-        val uri = FileProvider.getUriForFile(this, "$packageName.files", File(path))
-        val send = Intent(Intent.ACTION_SEND).apply {
-            type = mime
-            putExtra(Intent.EXTRA_STREAM, uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    /** «Поділитися» одним файлом або кількома (напр. сторінки скану в PNG). */
+    private fun shareFiles(paths: List<String>, mime: String) {
+        val uris = ArrayList(paths.map { FileProvider.getUriForFile(this, "$packageName.files", File(it)) })
+        val send = if (uris.size == 1) {
+            Intent(Intent.ACTION_SEND).putExtra(Intent.EXTRA_STREAM, uris[0])
+        } else {
+            Intent(Intent.ACTION_SEND_MULTIPLE).putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
         }
+        send.type = mime
+        send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         startActivity(Intent.createChooser(send, null))
     }
 

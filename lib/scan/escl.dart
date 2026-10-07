@@ -93,7 +93,15 @@ class EsclClient {
   final int port;
   final String root;
 
-  Uri _uri(String path) => Uri(scheme: 'http', host: host, port: port, path: path.startsWith('/') ? path : '/$root/$path');
+  /// [root] — з mDNS-поля `rs` (зазвичай «eSCL»; буває порожнім).
+  Uri _uri(String path) {
+    final r = root.replaceAll(RegExp(r'^/+|/+$'), '');
+    return Uri(
+        scheme: 'http',
+        host: host,
+        port: port,
+        path: path.startsWith('/') ? path : (r.isEmpty ? '/$path' : '/$r/$path'));
+  }
 
   Future<(int, Uint8List, HttpHeaders)> _send(String method, Uri uri,
       {String? body, Duration timeout = const Duration(seconds: 10)}) async {
@@ -131,30 +139,74 @@ class EsclClient {
     }
   }
 
-  /// Сканує одну сторінку зі скла. Повертає вміст (JPEG). Завдання завжди дочитується до кінця
-  /// (404) або видаляється, інакше сканер лишається «зайнятим».
-  Future<Uint8List> scanPage(String settingsXml) async {
+  /// Виконує завдання й повертає всі сторінки (JPEG): зі скла — одну, з подавача — скільки там
+  /// аркушів. Сторінки читаються, поки сканер не скаже 404 («більше нема»); при помилці завдання
+  /// видаляється — інакше сканер лишається «зайнятим». [onPage] — після кожної сторінки.
+  Future<List<Uint8List>> scan(String settingsXml, {void Function(int pages)? onPage}) async {
     final (status, _, headers) = await _send('POST', _uri('ScanJobs'), body: settingsXml);
     if (status == 503) throw ScanException('Сканер зайнятий — спробуй за хвилину');
-    if (status == 409) throw ScanException('Сканер не підтримує такі налаштування');
+    if (status == 409) throw ScanException('Сканер не підтримує такі налаштування (або в подавачі нема паперу)');
     if (status != 201) throw ScanException('Сканер відхилив завдання (HTTP $status)');
     final location = headers.value(HttpHeaders.locationHeader);
     if (location == null) throw ScanException('Сканер не повідомив адресу завдання');
+    // Лише шлях: хост у Location буває ім'ям, яке телефон не розв'яже (напр. ім'я домашнього сервера).
     final job = Uri.parse(location).path;
+    final pages = <Uint8List>[];
     try {
-      for (var attempt = 0; attempt < 30; attempt++) {
+      var waits = 0;
+      while (true) {
         final (st, data, _) = await _send('GET', _uri('$job/NextDocument'), timeout: const Duration(seconds: 90));
         if (st == 200) {
-          await _send('GET', _uri('$job/NextDocument')).catchError((_) => (0, Uint8List(0), headers)); // закрити (404)
-          return data;
+          pages.add(data);
+          onPage?.call(pages.length);
+          waits = 0;
+          continue;
         }
-        if (st != 503) throw ScanException('Сканер не віддав сторінку (HTTP $st)');
+        if (st == 404) {
+          if (pages.isEmpty) throw ScanException('Сканер нічого не віддав (у подавачі нема паперу?)');
+          return pages;
+        }
+        if (st != 503 || ++waits > 60) throw ScanException('Сканер не віддав сторінку (HTTP $st)');
         await Future<void>.delayed(const Duration(seconds: 1)); // ще сканує
       }
-      throw ScanException('Сканер так і не віддав сторінку');
     } catch (_) {
       await _send('DELETE', _uri(job)).catchError((_) => (0, Uint8List(0), headers));
       rethrow;
     }
   }
+}
+
+/// Знайдений сканер: як до нього звертатися й що він уміє. Буває на самому принтері (Brother)
+/// або на окремому шлюзі (напр. AirSane на домашньому сервері для Xerox).
+class ScannerRef {
+  ScannerRef({required this.id, required this.name, required this.client, required this.caps, DateTime? lastSeen})
+      : lastSeen = lastSeen ?? DateTime.now();
+
+  final String id;
+  final String name;
+  final EsclClient client;
+  final ScannerCaps caps;
+  DateTime lastSeen;
+
+  String get host => client.host;
+}
+
+/// Назва для порівняння принтера зі сканером: без регістру, без префікса шлюзу «WSD».
+String scannerMatchName(String s) =>
+    s.toLowerCase().replaceFirst(RegExp(r'^\s*wsd\s+'), '').replaceAll(RegExp(r'\s+'), ' ').trim();
+
+/// Чи це сканер того самого пристрою: та сама адреса або назва одна в одній.
+bool scannerMatchesPrinter(
+    {required String scannerName,
+    required String scannerHost,
+    required String printerName,
+    required String printerHost,
+    String? printerModel}) {
+  if (scannerHost == printerHost) return true;
+  final s = scannerMatchName(scannerName);
+  for (final p in [printerName, if (printerModel != null) printerModel]) {
+    final n = scannerMatchName(p);
+    if (s.length >= 6 && n.length >= 6 && (s.contains(n) || n.contains(s))) return true; // коротке «HP» — не вгадуємо
+  }
+  return false;
 }
