@@ -83,12 +83,8 @@ Translations live in `lib/l10n/app_uk.arb` (source) and `lib/l10n/app_en.arb`.
 
 ## Roadmap
 
-- **Desktop app** (Linux, Windows) — the core is plain Dart and already runs on Linux.
-- **Smarter "Share → print"**: pick the right printer and settings for the shared file automatically.
-- **One-tap copy**: scan and print in one step.
-- **IPP Everywhere / PWG raster** for printers without AirPrint raster.
-- **Direct JPEG printing** on printers that accept it (smaller jobs, better photo quality).
-- Photo prints for documents (3×4, 3.5×4.5 with cut lines).
+What's done and what's next — see [ROADMAP.md](ROADMAP.md). Up next: an **Android print service**, so KamiDrop
+printers show up in the system "Print" dialog of any app (Chrome, Photos, Gmail…).
 
 ## License
 
