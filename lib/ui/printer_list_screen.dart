@@ -290,7 +290,7 @@ class _SharedFileBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final name = path.split('/').last;
+    final name = path.split(RegExp(r'[/\\]')).last;
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 10, 4, 10),
       decoration: BoxDecoration(

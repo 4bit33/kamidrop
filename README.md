@@ -1,6 +1,6 @@
 # KamiDrop 紙
 
-**English** · [Українська](README.uk.md)
+**English** · [Українська](README.uk.md) · [![build](https://github.com/4bit33/kamidrop/actions/workflows/build.yml/badge.svg)](https://github.com/4bit33/kamidrop/actions/workflows/build.yml)
 
 Lightweight local printing and scanning for Android — "like AirPrint": no drivers, no accounts, no cloud.
 KamiDrop finds printers on your Wi-Fi by itself, prints over IPP in the AirPrint raster format and scans
@@ -47,6 +47,16 @@ phone on the same Wi-Fi network. Scanning needs a scanner with eSCL / AirScan (o
 
 After that KamiDrop tells you when a new version is out.
 
+### Windows and Linux (preview builds)
+
+Android is the main platform, but there are desktop builds too (in the same releases as the APK):
+printing and scanning work, but the interface is still phone-shaped and updates are manual.
+
+- **Windows**: `kamidrop-…-windows-x64.zip` → unpack → `kamidrop.exe`. On first launch allow network
+  access in the firewall prompt — otherwise no printers will be found.
+- **Linux**: `kamidrop-…-linux-x64.tar.gz` → unpack → `./install.sh` (adds a menu entry) or just run
+  `./kamidrop`.
+
 ## How it works
 
 Almost everything is implemented in plain Dart, without printing or scanning libraries:
@@ -81,6 +91,11 @@ flutter build apk --release --split-per-abi   # release APKs
 Release builds are signed with the key from `android/key.properties` (not in the repository, see
 [Flutter docs](https://docs.flutter.dev/deployment/android#signing-the-app)); without it the debug key
 is used. There is also a Linux build for quick development: `flutter run -d linux`.
+
+Desktop: `flutter build windows` (on Windows, with Visual Studio and the "Desktop development with C++"
+workload) or `flutter build linux` (needs `clang cmake ninja-build pkg-config libgtk-3-dev`); the archive
+is made by `tool/package_linux.sh`. GitHub Actions runs the tests and builds Android, Linux and Windows on
+every push, and attaches the desktop archives to a published release.
 
 Translations live in `lib/l10n/app_uk.arb` (source) and `lib/l10n/app_en.arb`.
 

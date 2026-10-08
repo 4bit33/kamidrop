@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=KamiDrop
+Comment=Print and scan on network printers — no drivers
+Comment[uk]=Друк і сканування на мережевих принтерах — без драйверів
+Exec=kamidrop %f
+Icon=kamidrop
+Terminal=false
+Categories=Office;
+MimeType=application/pdf;image/jpeg;image/png;

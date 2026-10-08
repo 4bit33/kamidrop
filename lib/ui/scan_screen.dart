@@ -4,6 +4,7 @@ import 'dart:isolate';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -228,27 +229,54 @@ class _ScanScreenState extends State<ScanScreen> {
   Future<void> _save() async {
     try {
       final files = await _writeFiles();
-      String? where;
-      for (final f in files) {
-        final name = f.uri.pathSegments.last;
-        final mime = _mimeOf([f]);
-        where = await PlatformBridge.saveToDownloads(f.path, name, mime);
-        if (where == null) break;
-      }
-      if (where == null) {
-        _say(l10n.saveFailedUseShare, error: true);
+      final String? where;
+      if (Platform.isAndroid) {
+        where = await _saveToDownloads(files);
+        if (where == null) {
+          _say(l10n.saveFailedUseShare, error: true);
+          return;
+        }
       } else {
-        final folder = where.substring(0, where.lastIndexOf('/'));
-        final bw = _format == ScanFormat.jpeg && _pages.any((p) => p.pdfPage is BilevelPage)
-            ? l10n.bwAsPng
-            : '';
-        _say(files.length == 1
-            ? l10n.savedTo(where)
-            : l10n.savedFiles(files.length, folder) + bw);
+        where = await _saveAs(files);
+        if (where == null) return; // скасували вибір місця
       }
+      final bw = _format == ScanFormat.jpeg && _pages.any((p) => p.pdfPage is BilevelPage)
+          ? l10n.bwAsPng
+          : '';
+      _say(files.length == 1
+          ? l10n.savedTo(where)
+          : l10n.savedFiles(files.length, File(where).parent.path) + bw);
     } catch (e) {
       _say(l10n.saveFailed('$e'), error: true);
     }
+  }
+
+  /// Android: у «Завантаження/KamiDrop». Повертає шлях останнього файлу або null, якщо не вдалося.
+  Future<String?> _saveToDownloads(List<File> files) async {
+    String? where;
+    for (final f in files) {
+      where = await PlatformBridge.saveToDownloads(f.path, f.uri.pathSegments.last, _mimeOf([f]));
+      if (where == null) break;
+    }
+    return where;
+  }
+
+  /// ПК: один файл — діалог «Зберегти як», кілька — вибір папки. null — користувач скасував.
+  Future<String?> _saveAs(List<File> files) async {
+    String nameOf(File f) => f.uri.pathSegments.last;
+    if (files.length == 1) {
+      final location = await getSaveLocation(suggestedName: nameOf(files.single));
+      if (location == null) return null;
+      await files.single.copy(location.path);
+      return location.path;
+    }
+    final dir = await getDirectoryPath();
+    if (dir == null) return null;
+    String? last;
+    for (final f in files) {
+      last = (await f.copy('$dir${Platform.pathSeparator}${nameOf(f)}')).path;
+    }
+    return last;
   }
 
   Future<void> _print() async {
@@ -416,18 +444,17 @@ class _ScanScreenState extends State<ScanScreen> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  if (Platform.isAndroid) ...[
+                  if (Platform.isAndroid)
                     OutlinedButton.icon(
                       onPressed: _scanning ? null : _share,
                       icon: const Icon(Icons.share_outlined, size: 18),
                       label: Text(l10n.share),
                     ),
-                    OutlinedButton.icon(
-                      onPressed: _scanning ? null : _save,
-                      icon: const Icon(Icons.download_outlined, size: 18),
-                      label: Text(l10n.save),
-                    ),
-                  ],
+                  OutlinedButton.icon(
+                    onPressed: _scanning ? null : _save,
+                    icon: const Icon(Icons.download_outlined, size: 18),
+                    label: Text(l10n.save),
+                  ),
                   OutlinedButton.icon(
                     onPressed: _scanning ? null : _print,
                     icon: const Icon(Icons.print_outlined, size: 18),

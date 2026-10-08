@@ -1,6 +1,6 @@
 # KamiDrop 紙
 
-[English](README.md) · **Українська**
+[English](README.md) · **Українська** · [![build](https://github.com/4bit33/kamidrop/actions/workflows/build.yml/badge.svg)](https://github.com/4bit33/kamidrop/actions/workflows/build.yml)
 
 Легкий локальний друк і сканування з Android — «як AirPrint»: без драйверів, акаунтів і хмари.
 KamiDrop сам знаходить принтери у Wi-Fi мережі, друкує по IPP в AirPrint-растрі й сканує по eSCL (AirScan).
@@ -46,6 +46,16 @@ KamiDrop сам знаходить принтери у Wi-Fi мережі, др�
 
 Далі KamiDrop сам підкаже, коли вийде нова версія.
 
+### Windows і Linux (попередні збірки)
+
+Основна платформа — Android, але є й збірки для ПК (у тих самих релізах, що й APK):
+друк і сканування працюють, проте інтерфейс поки «телефонний», а оновлюватися треба вручну.
+
+- **Windows**: `kamidrop-…-windows-x64.zip` → розпакувати → `kamidrop.exe`. При першому запуску
+  дозволь доступ до мережі в запиті брандмауера — без цього принтери не знайдуться.
+- **Linux**: `kamidrop-…-linux-x64.tar.gz` → розпакувати → `./install.sh` (ярлик у меню) або просто
+  запустити `./kamidrop`.
+
 ## Як це влаштовано
 
 Майже все написано на чистому Dart, без бібліотек для друку чи сканування:
@@ -79,6 +89,11 @@ flutter build apk --release --split-per-abi   # release-APK
 Release підписується ключем з `android/key.properties` (не в репозиторії; див.
 [документацію Flutter](https://docs.flutter.dev/deployment/android#signing-the-app)); без нього —
 debug-ключем. Для швидкої розробки є й Linux-збірка: `flutter run -d linux`.
+
+Для ПК: `flutter build windows` (на Windows, з Visual Studio і компонентом «Desktop development with C++»)
+або `flutter build linux` (потрібні `clang cmake ninja-build pkg-config libgtk-3-dev`), архів —
+`tool/package_linux.sh`. GitHub Actions на кожен пуш проганяє тести й збирає Android, Linux і Windows,
+а на опублікований реліз сам додає до нього архіви для ПК.
 
 Переклади — у `lib/l10n/app_uk.arb` (джерело) і `lib/l10n/app_en.arb`.
 

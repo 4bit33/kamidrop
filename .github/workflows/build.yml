@@ -1,0 +1,113 @@
+# Тести й збірки на кожен пуш; на опублікований реліз — ще й архіви для Windows і Linux у реліз.
+# Android-APK у реліз кладеться вручну: його підписує ключ, якого в CI немає.
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: 3.47.5
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - run: sudo apt-get update && sudo apt-get install -y poppler-utils
+      - run: flutter pub get
+      - run: dart analyze
+      - run: flutter test
+
+  linux:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev
+      - run: flutter build linux --release
+      - run: tool/package_linux.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kamidrop-linux-x64
+          path: build/release/*.tar.gz
+      - name: Додати до релізу
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" build/release/*.tar.gz --clobber
+
+  windows:
+    needs: test
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - run: flutter build windows --release
+      - name: Запакувати
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([^+]+)').Matches[0].Groups[1].Value.Trim()
+          $name = "kamidrop-$version-windows-x64"
+          $stage = "build/release/$name"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item -Recurse build/windows/x64/runner/Release/* $stage
+          # Рантайм Visual C++ поруч з exe — щоб запускалося й там, де його не встановлено.
+          foreach ($dll in 'msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll') {
+            Copy-Item "$env:WINDIR/System32/$dll" $stage
+          }
+          Compress-Archive -Path $stage -DestinationPath "build/release/$name.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kamidrop-windows-x64
+          path: build/release/*.zip
+      - name: Додати до релізу
+        if: github.event_name == 'release'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" build/release/*.zip --clobber
+
+  android:
+    needs: test
+    if: github.event_name != 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      # Лише перевірка, що збирається; підписаний release-APK збирається локально.
+      - run: flutter build apk --debug

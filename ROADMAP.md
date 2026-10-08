@@ -30,6 +30,9 @@
  ○ LATER ─────────────────────────────────────────────────────────────────────
  │
  ├─ v0.3    ▸ DESKTOP: Linux and Windows (the core is plain Dart)
+ │          ▸ groundwork is in: CI builds, archives in releases, saving scans,
+ │            "Open with"; next — test on Windows, a wide window, drag & drop,
+ │            updates
  │
  └─ someday ▸ IPP Everywhere / PWG raster (printers without AirPrint raster)
             ▸ direct JPEG printing where supported (faster, better photos)

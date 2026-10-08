@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:pdfrx/pdfrx.dart';
@@ -19,17 +21,22 @@ Future<void> printServiceMain() async {
   await PrintServiceHost().start();
 }
 
-void main() {
+void main(List<String> args) {
   WidgetsFlutterBinding.ensureInitialized();
   pdfrxFlutterInitialize(); // потрібно, бо PdfDocument використовуємо без віджета-переглядача
-  runApp(const KamiDropApp());
+  // На ПК файл приходить аргументом («Відкрити за допомогою → KamiDrop» чи `kamidrop файл.pdf`).
+  final file = args.where((a) => File(a).existsSync()).firstOrNull;
+  runApp(KamiDropApp(openFile: file));
 }
 
 class KamiDropApp extends StatefulWidget {
-  const KamiDropApp({super.key, this.startDiscovery = true});
+  const KamiDropApp({super.key, this.startDiscovery = true, this.openFile});
 
   /// У тестах вимикаємо реальний пошук у мережі.
   final bool startDiscovery;
+
+  /// Файл з командного рядка (ПК) — показується так само, як файл із «Поділитися».
+  final String? openFile;
 
   @override
   State<KamiDropApp> createState() => _KamiDropAppState();
@@ -38,8 +45,8 @@ class KamiDropApp extends StatefulWidget {
 class _KamiDropAppState extends State<KamiDropApp> {
   final discovery = PrinterDiscovery();
 
-  /// Файл, отриманий через «Поділитися → KamiDrop» (Android).
-  final sharedFile = ValueNotifier<String?>(null);
+  /// Файл, отриманий через «Поділитися → KamiDrop» (Android) або з командного рядка (ПК).
+  late final sharedFile = ValueNotifier<String?>(widget.openFile);
 
   KamiSettings settings = KamiSettings();
   late final updates = UpdateController(settings);

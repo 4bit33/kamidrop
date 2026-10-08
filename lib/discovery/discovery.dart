@@ -214,8 +214,8 @@ class PrinterDiscovery extends ChangeNotifier {
       return;
     }
 
-    // Android не підтримує reusePort для UDP-сокетів — там одразу прив'язуємося без нього.
-    var client = Platform.isAndroid ? MDnsClient(rawDatagramSocketFactory: _bindWithoutReusePort) : MDnsClient();
+    // Android і Windows не підтримують reusePort для UDP-сокетів — там одразу прив'язуємося без нього.
+    var client = Platform.isAndroid || Platform.isWindows ? MDnsClient(rawDatagramSocketFactory: _bindWithoutReusePort) : MDnsClient();
     try {
       try {
         await client.start();

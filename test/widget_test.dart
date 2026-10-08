@@ -33,4 +33,11 @@ void main() {
     expect(find.text('No printers found yet'), findsOneWidget);
     expect(l10n.printerNotResponding, contains('isn\'t responding'), reason: 'глобальний l10n теж перемкнувся');
   });
+
+  testWidgets('Файл з командного рядка (ПК) показується банером, як із «Поділитися»', (tester) async {
+    await tester.pumpWidget(const KamiDropApp(startDiscovery: false, openFile: r'C:\Users\me\Docs\лист.pdf'));
+    await tester.pumpAndSettle();
+    expect(find.text('лист.pdf'), findsOneWidget, reason: 'назва без шляху, і з Windows-розділювачами');
+    expect(find.text('Pick a printer below'), findsOneWidget);
+  });
 }
