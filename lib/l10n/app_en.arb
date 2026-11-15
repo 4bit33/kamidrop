@@ -205,5 +205,12 @@
   "saveFailedUseShare": "Couldn't save — use “Share” instead",
   "savedTo": "Saved: {path}",
   "savedFiles": "{count, plural, =1{Saved 1 file to {folder}} other{Saved {count} files to {folder}}}",
-  "bwAsPng": " (black-and-white pages as PNG)"
+  "bwAsPng": " (black-and-white pages as PNG)",
+
+  "pcPrintersTitle": "KamiDrop printers in Windows",
+  "pcPrintersSubtitle": "Add them and the printers appear under Print in any app. Windows will ask for administrator approval.",
+  "pcPrintersActive": "{names}. They print while KamiDrop is running.",
+  "pcPrintersFailed": "Failed: no printer found yet, or Windows did not give permission",
+  "pcDuplicatesTitle": "Remove duplicates?",
+  "pcDuplicatesBody": "These Windows printers now duplicate KamiDrop:\n{names}"
 }

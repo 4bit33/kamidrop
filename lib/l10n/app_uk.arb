@@ -252,5 +252,14 @@
   "@savedTo": {"placeholders": {"path": {"type": "String"}}},
   "savedFiles": "{count, plural, one{Збережено {count} файл у {folder}} few{Збережено {count} файли у {folder}} many{Збережено {count} файлів у {folder}} other{Збережено {count} файлу у {folder}}}",
   "@savedFiles": {"placeholders": {"count": {"type": "int"}, "folder": {"type": "String"}}},
-  "bwAsPng": " (чорно-білі сторінки — у PNG)"
+  "bwAsPng": " (чорно-білі сторінки — у PNG)",
+
+  "pcPrintersTitle": "Принтери KamiDrop у Windows",
+  "pcPrintersSubtitle": "Додай — і принтери з'являться в «Друк» у будь-якій програмі. Windows попросить підтвердження адміністратора.",
+  "pcPrintersActive": "{names}. Друкують, поки KamiDrop запущений.",
+  "@pcPrintersActive": {"placeholders": {"names": {"type": "String"}}},
+  "pcPrintersFailed": "Не вдалося: принтер ще не знайдено або Windows не дала дозволу",
+  "pcDuplicatesTitle": "Прибрати дублікати?",
+  "pcDuplicatesBody": "Ці принтери Windows тепер дублюють KamiDrop:\n{names}",
+  "@pcDuplicatesBody": {"placeholders": {"names": {"type": "String"}}}
 }

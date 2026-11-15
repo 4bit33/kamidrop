@@ -731,4 +731,28 @@ class L10nUk extends L10n {
 
   @override
   String get bwAsPng => ' (чорно-білі сторінки — у PNG)';
+
+  @override
+  String get pcPrintersTitle => 'Принтери KamiDrop у Windows';
+
+  @override
+  String get pcPrintersSubtitle =>
+      'Додай — і принтери з\'являться в «Друк» у будь-якій програмі. Windows попросить підтвердження адміністратора.';
+
+  @override
+  String pcPrintersActive(String names) {
+    return '$names. Друкують, поки KamiDrop запущений.';
+  }
+
+  @override
+  String get pcPrintersFailed =>
+      'Не вдалося: принтер ще не знайдено або Windows не дала дозволу';
+
+  @override
+  String get pcDuplicatesTitle => 'Прибрати дублікати?';
+
+  @override
+  String pcDuplicatesBody(String names) {
+    return 'Ці принтери Windows тепер дублюють KamiDrop:\n$names';
+  }
 }

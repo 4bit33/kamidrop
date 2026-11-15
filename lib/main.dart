@@ -7,6 +7,7 @@ import 'package:pdfrx/pdfrx.dart';
 import 'discovery/discovery.dart';
 import 'l10n/l10n.dart';
 import 'platform/platform_bridge.dart';
+import 'printproxy/proxy_host.dart';
 import 'printservice/print_service_host.dart';
 import 'settings.dart';
 import 'update/update_controller.dart';
@@ -45,6 +46,9 @@ class KamiDropApp extends StatefulWidget {
 class _KamiDropAppState extends State<KamiDropApp> {
   final discovery = PrinterDiscovery();
 
+  /// Windows: принтери KamiDrop у системному «Друк» (на інших ОС не використовується).
+  late final proxy = PrintProxyHost(discovery);
+
   /// Файл, отриманий через «Поділитися → KamiDrop» (Android) або з командного рядка (ПК).
   late final sharedFile = ValueNotifier<String?>(widget.openFile);
 
@@ -60,6 +64,7 @@ class _KamiDropAppState extends State<KamiDropApp> {
         if (!mounted) return;
         setState(() => settings = s);
         appLanguage.value = s.language;
+        if (Platform.isWindows && s.pcPrinters) proxy.start();
         updates
           ..settings = s
           ..check();
@@ -73,6 +78,7 @@ class _KamiDropAppState extends State<KamiDropApp> {
 
   @override
   void dispose() {
+    proxy.server.stop();
     discovery.dispose();
     sharedFile.dispose();
     updates.dispose();
@@ -104,7 +110,13 @@ class _KamiDropAppState extends State<KamiDropApp> {
           setL10n(l);
           return KeyedSubtree(key: ValueKey(l.localeName), child: child!);
         },
-        home: PrinterListScreen(discovery: discovery, sharedFile: sharedFile, settings: settings, updates: updates),
+        home: PrinterListScreen(
+          discovery: discovery,
+          sharedFile: sharedFile,
+          settings: settings,
+          updates: updates,
+          proxy: Platform.isWindows ? proxy : null,
+        ),
       ),
     );
   }

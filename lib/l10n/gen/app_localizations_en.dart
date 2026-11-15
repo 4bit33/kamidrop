@@ -750,4 +750,28 @@ class L10nEn extends L10n {
 
   @override
   String get bwAsPng => ' (black-and-white pages as PNG)';
+
+  @override
+  String get pcPrintersTitle => 'KamiDrop printers in Windows';
+
+  @override
+  String get pcPrintersSubtitle =>
+      'Add them and the printers appear under Print in any app. Windows will ask for administrator approval.';
+
+  @override
+  String pcPrintersActive(String names) {
+    return '$names. They print while KamiDrop is running.';
+  }
+
+  @override
+  String get pcPrintersFailed =>
+      'Failed: no printer found yet, or Windows did not give permission';
+
+  @override
+  String get pcDuplicatesTitle => 'Remove duplicates?';
+
+  @override
+  String pcDuplicatesBody(String names) {
+    return 'These Windows printers now duplicate KamiDrop:\n$names';
+  }
 }

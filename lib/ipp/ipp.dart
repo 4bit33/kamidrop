@@ -32,6 +32,11 @@ class IppOp {
   static const cancelJob = 0x0008;
   static const getJobAttributes = 0x0009;
   static const getPrinterAttributes = 0x000B;
+  // Лише для нашого сервера (printproxy): їх надсилає Windows.
+  static const validateJob = 0x0004;
+  static const createJob = 0x0005;
+  static const sendDocument = 0x0006;
+  static const getJobs = 0x000A;
 }
 
 class IppVersion {
@@ -144,7 +149,10 @@ class IppResponse {
   final int status;
   final Map<String, List<Object?>> attributes;
 
-  IppResponse(this.status, this.attributes);
+  /// Де закінчуються атрибути. У запиті Print-Job / Send-Document далі йде документ.
+  final int bodyOffset;
+
+  IppResponse(this.status, this.attributes, [this.bodyOffset = 0]);
 
   bool get isSuccess => status <= 0x00FF;
 
@@ -217,7 +225,7 @@ IppResponse parseIppResponse(Uint8List data) {
     }
     if (current != null) attrs[current]!.add(_decodeValue(tag, raw));
   }
-  return IppResponse(status, attrs);
+  return IppResponse(status, attrs, pos);
 }
 
 Object? _decodeValue(int tag, Uint8List raw) {

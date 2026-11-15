@@ -141,6 +141,8 @@ class PrinterDiscovery extends ChangeNotifier {
       final list = jsonDecode(await f.readAsString()) as List<dynamic>;
       for (final raw in list.cast<Map<String, dynamic>>()) {
         final id = raw['id'] as String;
+        // Записи без TXT — дублікати від старих версій (див. _resolve); ручні «за IP» TXT не мають.
+        if (raw['manual'] != true && (raw['txt'] as Map?)?.isEmpty != false) continue;
         _known[id] = raw;
         if (_printers.containsKey(id)) continue;
         final manual = raw['manual'] == true;
@@ -215,14 +217,14 @@ class PrinterDiscovery extends ChangeNotifier {
     }
 
     // Android і Windows не підтримують reusePort для UDP-сокетів — там одразу прив'язуємося без нього.
-    var client = Platform.isAndroid || Platform.isWindows ? MDnsClient(rawDatagramSocketFactory: _bindWithoutReusePort) : MDnsClient();
+    var client = Platform.isAndroid || Platform.isWindows ? MDnsClient(rawDatagramSocketFactory: _bindWithoutReusePort) : MDnsClient(rawDatagramSocketFactory: _bind);
     try {
       try {
-        await client.start();
+        await client.start(interfacesFactory: _joinableInterfaces);
       } on SocketException {
         // Деякі системи (часто Android) не дозволяють reusePort на порту 5353 — пробуємо без нього.
         client = MDnsClient(rawDatagramSocketFactory: _bindWithoutReusePort);
-        await client.start();
+        await client.start(interfacesFactory: _joinableInterfaces);
       }
       final found = <_Found>[];
       for (final type in const ['_ipp._tcp.local', '_ipps._tcp.local', '_uscan._tcp.local']) {
@@ -280,10 +282,12 @@ class PrinterDiscovery extends ChangeNotifier {
     final srv = await _first<SrvResourceRecord>(client, ResourceRecordQuery.service(serviceName));
     if (srv == null) return null;
     final txtRecord = await _first<TxtResourceRecord>(client, ResourceRecordQuery.text(serviceName));
+    // Без TXT немає uuid — принтер отримав би інший id (за назвою) і другу картку. Краще наступного разу.
+    if (txtRecord == null) return null;
     final ip = await _first<IPAddressResourceRecord>(client, ResourceRecordQuery.addressIPv4(srv.target));
 
     final txt = <String, String>{};
-    for (final entry in (txtRecord?.text ?? '').split('\n')) {
+    for (final entry in txtRecord.text.split('\n')) {
       final eq = entry.indexOf('=');
       if (eq > 0) txt[entry.substring(0, eq).toLowerCase()] = entry.substring(eq + 1);
     }
@@ -297,6 +301,38 @@ class PrinterDiscovery extends ChangeNotifier {
     );
   }
 
+  /// Лише інтерфейси, на яких вдається приєднатися до mDNS-групи. multicast_dns сам цього не
+  /// перевіряє: один «мертвий» адаптер (Windows: errno 10042) валив увесь пошук.
+  static Future<Iterable<NetworkInterface>> _joinableInterfaces(InternetAddressType type) async {
+    final probe = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+    try {
+      final ok = <NetworkInterface>[];
+      for (final i in await NetworkInterface.list(includeLinkLocal: true, type: type, includeLoopback: true)) {
+        try {
+          probe.joinMulticast(InternetAddress('224.0.0.251'), i);
+          ok.add(i);
+        } on OSError catch (_) {
+        } on SocketException catch (_) {}
+      }
+      return ok;
+    } finally {
+      probe.close();
+    }
+  }
+
+  /// Сокет для multicast_dns, який шле запит через кожен мережевий інтерфейс (див. [_AllInterfacesSocket]).
+  static Future<RawDatagramSocket> _bind(
+    dynamic host,
+    int port, {
+    bool reuseAddress = true,
+    bool reusePort = true,
+    int ttl = 1,
+  }) async {
+    final socket = await RawDatagramSocket.bind(host, port, reuseAddress: true, reusePort: reusePort, ttl: ttl);
+    final interfaces = await NetworkInterface.list(type: InternetAddressType.IPv4, includeLinkLocal: true);
+    return _AllInterfacesSocket(socket, [for (final i in interfaces) i.addresses[0]]);
+  }
+
   static Future<RawDatagramSocket> _bindWithoutReusePort(
     dynamic host,
     int port, {
@@ -304,7 +340,7 @@ class PrinterDiscovery extends ChangeNotifier {
     bool reusePort = false,
     int ttl = 1,
   }) {
-    return RawDatagramSocket.bind(host, port, reuseAddress: true, reusePort: false, ttl: ttl);
+    return _bind(host, port, reusePort: false, ttl: ttl);
   }
 
   static Future<T?> _first<T extends ResourceRecord>(MDnsClient c, ResourceRecordQuery q) async {
@@ -431,3 +467,66 @@ class _Found {
   _Found({required this.name, required this.host, required this.port, required this.tls, required this.txt});
 }
 
+/// multicast_dns шле IPv4-запит один раз — через «типовий» інтерфейс системи. На ПК з кількома
+/// адаптерами (VPN, віртуальні машини) це часто не домашня мережа, і принтери запиту не чують.
+/// Тому multicast-пакети дублюємо через кожен інтерфейс; решта — як у звичайного сокета.
+class _AllInterfacesSocket extends StreamView<RawSocketEvent> implements RawDatagramSocket {
+  _AllInterfacesSocket(this._s, this._interfaces) : super(_s);
+
+  final RawDatagramSocket _s;
+  final List<InternetAddress> _interfaces;
+
+  @override
+  int send(List<int> buffer, InternetAddress address, int port) {
+    if (!address.isMulticast || address.type != InternetAddressType.IPv4) return _s.send(buffer, address, port);
+    var sent = 0;
+    for (final i in _interfaces) {
+      try {
+        _s.setRawOption(RawSocketOption(RawSocketOption.levelIPv4, RawSocketOption.IPv4MulticastInterface, i.rawAddress));
+        sent = _s.send(buffer, address, port);
+      } catch (_) {} // інтерфейс без multicast (вимкнений адаптер тощо)
+    }
+    return sent > 0 ? sent : _s.send(buffer, address, port);
+  }
+
+  @override
+  Datagram? receive() => _s.receive();
+  @override
+  void close() => _s.close();
+  @override
+  InternetAddress get address => _s.address;
+  @override
+  int get port => _s.port;
+  @override
+  void joinMulticast(InternetAddress group, [NetworkInterface? interface]) => _s.joinMulticast(group, interface);
+  @override
+  void leaveMulticast(InternetAddress group, [NetworkInterface? interface]) => _s.leaveMulticast(group, interface);
+  @override
+  Uint8List getRawOption(RawSocketOption option) => _s.getRawOption(option);
+  @override
+  void setRawOption(RawSocketOption option) => _s.setRawOption(option);
+  @override
+  bool get readEventsEnabled => _s.readEventsEnabled;
+  @override
+  set readEventsEnabled(bool v) => _s.readEventsEnabled = v;
+  @override
+  bool get writeEventsEnabled => _s.writeEventsEnabled;
+  @override
+  set writeEventsEnabled(bool v) => _s.writeEventsEnabled = v;
+  @override
+  bool get multicastLoopback => _s.multicastLoopback;
+  @override
+  set multicastLoopback(bool v) => _s.multicastLoopback = v;
+  @override
+  int get multicastHops => _s.multicastHops;
+  @override
+  set multicastHops(int v) => _s.multicastHops = v;
+  @override
+  bool get broadcastEnabled => _s.broadcastEnabled;
+  @override
+  set broadcastEnabled(bool v) => _s.broadcastEnabled = v;
+  @override
+  NetworkInterface? get multicastInterface => null; // у dart:io не реалізовано
+  @override
+  set multicastInterface(NetworkInterface? v) {}
+}

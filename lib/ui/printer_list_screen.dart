@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../discovery/discovery.dart';
 import '../platform/platform_bridge.dart';
+import '../printproxy/proxy_host.dart';
 import '../printing/capabilities.dart';
 import '../scan/escl.dart';
 import '../settings.dart';
@@ -21,12 +22,14 @@ class PrinterListScreen extends StatefulWidget {
     required this.sharedFile,
     required this.settings,
     required this.updates,
+    this.proxy,
   });
 
   final PrinterDiscovery discovery;
   final ValueNotifier<String?> sharedFile;
   final KamiSettings settings;
   final UpdateController updates;
+  final PrintProxyHost? proxy; // лише Windows
 
   @override
   State<PrinterListScreen> createState() => _PrinterListScreenState();
@@ -99,7 +102,9 @@ class _PrinterListScreenState extends State<PrinterListScreen> {
 
   Future<void> _openSettings() async {
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => SettingsScreen(settings: widget.settings, updates: widget.updates)),
+      MaterialPageRoute<void>(
+        builder: (_) => SettingsScreen(settings: widget.settings, updates: widget.updates, proxy: widget.proxy),
+      ),
     );
     if (mounted) setState(() {});
     _maybeAutoOpen();

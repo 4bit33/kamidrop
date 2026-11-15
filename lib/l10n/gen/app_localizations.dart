@@ -1266,6 +1266,42 @@ abstract class L10n {
   /// In uk, this message translates to:
   /// **' (чорно-білі сторінки — у PNG)'**
   String get bwAsPng;
+
+  /// No description provided for @pcPrintersTitle.
+  ///
+  /// In uk, this message translates to:
+  /// **'Принтери KamiDrop у Windows'**
+  String get pcPrintersTitle;
+
+  /// No description provided for @pcPrintersSubtitle.
+  ///
+  /// In uk, this message translates to:
+  /// **'Додай — і принтери з\'являться в «Друк» у будь-якій програмі. Windows попросить підтвердження адміністратора.'**
+  String get pcPrintersSubtitle;
+
+  /// No description provided for @pcPrintersActive.
+  ///
+  /// In uk, this message translates to:
+  /// **'{names}. Друкують, поки KamiDrop запущений.'**
+  String pcPrintersActive(String names);
+
+  /// No description provided for @pcPrintersFailed.
+  ///
+  /// In uk, this message translates to:
+  /// **'Не вдалося: принтер ще не знайдено або Windows не дала дозволу'**
+  String get pcPrintersFailed;
+
+  /// No description provided for @pcDuplicatesTitle.
+  ///
+  /// In uk, this message translates to:
+  /// **'Прибрати дублікати?'**
+  String get pcDuplicatesTitle;
+
+  /// No description provided for @pcDuplicatesBody.
+  ///
+  /// In uk, this message translates to:
+  /// **'Ці принтери Windows тепер дублюють KamiDrop:\n{names}'**
+  String pcDuplicatesBody(String names);
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

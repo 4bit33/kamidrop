@@ -38,6 +38,7 @@ class KamiSettings {
     this.scanFormat,
     this.language = 'system',
     this.printServiceHintShown = false,
+    this.pcPrinters = false,
   })  : printers = printers ?? {},
         layoutStreak = layoutStreak ?? {};
 
@@ -53,6 +54,7 @@ class KamiSettings {
   String? scanFormat; // pdf / jpeg / png — у чому зберігати й ділитися
   String language; // 'system' / 'uk' / 'en'
   bool printServiceHintShown; // банер «друк з будь-якого застосунку» вже бачили
+  bool pcPrinters; // Windows: принтери KamiDrop додано в систему — піднімати IPP-сервер при запуску
 
   String? lastPrinterId;
   final Map<String, PrinterPrefs> printers;
@@ -145,6 +147,7 @@ class KamiSettings {
         'scanFormat': scanFormat,
         'language': language,
         'printServiceHintShown': printServiceHintShown,
+        'pcPrinters': pcPrinters,
         'lastPrinterId': lastPrinterId,
         'printers': printers.map((id, p) => MapEntry(id, p.toJson())),
         'documentLayout': documentLayout == null ? null : layoutToJson(documentLayout!),
@@ -172,6 +175,7 @@ class KamiSettings {
       scanFormat: j['scanFormat'] as String?,
       language: j['language'] as String? ?? 'system',
       printServiceHintShown: j['printServiceHintShown'] as bool? ?? false,
+      pcPrinters: j['pcPrinters'] as bool? ?? false,
       layoutStreak: (j['layoutStreak'] as Map<String, dynamic>? ?? {}).map((k, v) => MapEntry(k, v as int)),
     );
   }

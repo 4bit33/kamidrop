@@ -13,6 +13,16 @@ Uint8List _jpegHeader(int w, int h, int comps) => Uint8List.fromList([
       0xFF, 0xD9,
     ]);
 
+/// Чи є утиліта в PATH (без `which` — його немає на Windows).
+Future<bool> _has(String tool) async {
+  try {
+    await Process.run(tool, ['-v']);
+    return true;
+  } on ProcessException {
+    return false;
+  }
+}
+
 void main() {
   test('jpegInfo читає розмір і канали з SOF', () {
     expect(jpegInfo(_jpegHeader(1680, 2195, 3)), (1680, 2195, 3));
@@ -51,8 +61,7 @@ void main() {
   });
 
   test('Справжній PDF відкривається pdfinfo (якщо є)', () async {
-    final which = await Process.run('which', ['pdfinfo']);
-    if (which.exitCode != 0) return;
+    if (!await _has('pdfinfo')) return;
     final dir = await Directory.systemTemp.createTemp('kd');
     final f = File('${dir.path}/t.pdf')..writeAsBytesSync(buildPdf([BilevelPage(Uint8List(2 * 16), 16, 16, 72)]));
     final r = await Process.run('pdfinfo', [f.path]);
@@ -62,8 +71,7 @@ void main() {
   });
 
   test('Справжній JPEG у PDF рендериться тим самим зображенням (pdftoppm, якщо є)', () async {
-    final which = await Process.run('which', ['pdftoppm']);
-    if (which.exitCode != 0) return;
+    if (!await _has('pdftoppm')) return;
     final jpeg = File('test/fixtures/tiny.jpg').readAsBytesSync();
     final (w, h, c) = jpegInfo(jpeg)!;
     expect([w, h, c], [120, 80, 3]);
