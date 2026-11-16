@@ -164,6 +164,16 @@ class PrintProxyHost {
     return await _elevated(script) ? [for (final p in missing) systemName(p)] : null;
   }
 
+  /// Автозапуск у фоні (значок у треї) — щоб принтери KamiDrop працювали без відкритого вікна.
+  /// Цей самий запис читає нативний бік (flutter_window.cpp): є він — закриття вікна ховає в трей.
+  static Future<void> setAutostart(bool on) async {
+    const key = r'HKCU\Software\Microsoft\Windows\CurrentVersion\Run';
+    await Process.run('reg', [
+      on ? 'add' : 'delete', key, '/v', 'KamiDrop', '/f',
+      if (on) ...['/t', 'REG_SZ', '/d', '"${Platform.resolvedExecutable}" --background'],
+    ]);
+  }
+
   static Future<bool> removeFromSystem(List<String> names) =>
       _elevated(["\$ErrorActionPreference = 'Stop'", for (final n in names) 'Remove-Printer -Name ${_q(n)}'].join('\n'));
 }

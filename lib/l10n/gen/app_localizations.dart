@@ -1282,7 +1282,7 @@ abstract class L10n {
   /// No description provided for @pcPrintersActive.
   ///
   /// In uk, this message translates to:
-  /// **'{names}. Друкують, поки KamiDrop запущений.'**
+  /// **'{names}. KamiDrop запускається разом із Windows і сидить у треї біля годинника.'**
   String pcPrintersActive(String names);
 
   /// No description provided for @pcPrintersFailed.

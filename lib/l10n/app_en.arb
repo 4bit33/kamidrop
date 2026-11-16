@@ -209,7 +209,7 @@
 
   "pcPrintersTitle": "KamiDrop printers in Windows",
   "pcPrintersSubtitle": "Add them and the printers appear under Print in any app. Windows will ask for administrator approval.",
-  "pcPrintersActive": "{names}. They print while KamiDrop is running.",
+  "pcPrintersActive": "{names}. KamiDrop starts with Windows and stays in the tray near the clock.",
   "pcPrintersFailed": "Failed: no printer found yet, or Windows did not give permission",
   "pcDuplicatesTitle": "Remove duplicates?",
   "pcDuplicatesBody": "These Windows printers now duplicate KamiDrop:\n{names}"

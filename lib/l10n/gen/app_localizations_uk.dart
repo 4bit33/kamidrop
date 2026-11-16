@@ -741,7 +741,7 @@ class L10nUk extends L10n {
 
   @override
   String pcPrintersActive(String names) {
-    return '$names. Друкують, поки KamiDrop запущений.';
+    return '$names. KamiDrop запускається разом із Windows і сидить у треї біля годинника.';
   }
 
   @override

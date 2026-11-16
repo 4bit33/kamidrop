@@ -42,6 +42,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final names = await PrintProxyHost.installed();
     if (!mounted) return;
     setState(() => _pcPrinters = names);
+    // Є принтери в системі — KamiDrop має жити у фоні: автозапуск і трей.
+    PrintProxyHost.setAutostart(names.isNotEmpty);
     if (s.pcPrinters != names.isNotEmpty) {
       s.pcPrinters = names.isNotEmpty;
       s.save();

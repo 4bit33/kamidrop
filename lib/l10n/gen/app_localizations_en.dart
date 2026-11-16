@@ -760,7 +760,7 @@ class L10nEn extends L10n {
 
   @override
   String pcPrintersActive(String names) {
-    return '$names. They print while KamiDrop is running.';
+    return '$names. KamiDrop starts with Windows and stays in the tray near the clock.';
   }
 
   @override
