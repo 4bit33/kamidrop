@@ -73,8 +73,8 @@ class IppProxyServer {
   /// Принтери, які є зараз (питаємо щоразу — список змінюється).
   final List<ProxyPrinter> Function() printers;
 
-  /// Друкує завдання; true — вийшло. Файл після цього видаляємо самі.
-  final Future<bool> Function(ProxyJob job) onJob;
+  /// Друкує завдання; null — вийшло, інакше причина невдачі. Файл після цього видаляємо самі.
+  final Future<String?> Function(ProxyJob job) onJob;
   final int port;
 
   HttpServer? _server;
@@ -134,6 +134,8 @@ class IppProxyServer {
         ..integer('job-state', state, tag: IppTag.enumValue)
         ..string(IppTag.keyword, 'job-state-reasons',
             state == _completed ? 'job-completed-successfully' : (state == _aborted ? 'aborted-by-system' : 'none'));
+      final message = _jobs[id]?.message;
+      if (message != null) b.string(IppTag.text, 'job-state-message', message);
     }
 
     switch (parsed.status) {
@@ -149,8 +151,9 @@ class IppProxyServer {
         final id = parsed.status == IppOp.printJob ? _nextJob++ : (parsed.first<int>('job-id') ?? 0);
         // Налаштування друку Windows надсилає в Create-Job, документ — у Send-Document.
         final job = _jobs[id] ??= _Job(parsed, _pending);
-        job.state = printer == null ? _aborted : _processing;
-        if (printer != null) unawaited(_run(id, job, slug, Uint8List.sublistView(req, parsed.bodyOffset)));
+        // Навіть якщо принтера зараз не видно: onJob сам вирішує, скільки на нього чекати.
+        job.state = _processing;
+        unawaited(_run(id, job, slug, Uint8List.sublistView(req, parsed.bodyOffset)));
         jobGroup(id);
       case IppOp.getJobAttributes:
         jobGroup(parsed.first<int>('job-id') ?? 0);
@@ -169,7 +172,7 @@ class IppProxyServer {
     final file = File('${Directory.systemTemp.path}/kamidrop-job-$pid-$id.pdf');
     try {
       await file.writeAsBytes(document);
-      final ok = await onJob(ProxyJob(
+      job.message = await onJob(ProxyJob(
         slug: slug,
         path: file.path,
         name: a.first<String>('job-name') ?? 'KamiDrop',
@@ -177,9 +180,11 @@ class IppProxyServer {
         color: a.first<String>('print-color-mode') != 'monochrome',
         duplex: (a.first<String>('sides') ?? 'one-sided') != 'one-sided',
       ));
-      job.state = ok ? _completed : _aborted;
-    } catch (_) {
-      job.state = _aborted;
+      job.state = job.message == null ? _completed : _aborted;
+    } catch (e) {
+      job
+        ..message = '$e'
+        ..state = _aborted;
     } finally {
       await file.delete().catchError((_) => file);
       // Windows ще кілька разів спитає стан; старі завдання тримати нема чого.
@@ -270,4 +275,5 @@ class _Job {
   _Job(this.attributes, this.state);
   final IppResponse attributes; // запит Create-Job / Print-Job з налаштуваннями
   int state;
+  String? message; // чому не надрукувалось
 }

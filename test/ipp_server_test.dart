@@ -18,7 +18,7 @@ void main() {
   test('Можливості: PDF, колір і дуплекс зі справжнього принтера; без принтера — зупинений', () async {
     final s = IppProxyServer(
       printers: () => const [ProxyPrinter(slug: 'x', name: 'Тест', color: true, duplex: true, dpi: 600, margin: 440)],
-      onJob: (_) async => true,
+      onJob: (_) async => null,
     );
     final r = parseIppResponse(await s.handle('x', req(IppOp.getPrinterAttributes).build()));
     expect(r.isSuccess, isTrue);
@@ -37,7 +37,7 @@ void main() {
 
   test('Create-Job + Send-Document, як у Windows: налаштування з першого, PDF з другого', () async {
     final got = Completer<ProxyJob>();
-    final finish = Completer<bool>();
+    final finish = Completer<String?>();
     late Uint8List saved;
     final s = IppProxyServer(
       printers: () => const [ProxyPrinter(slug: 'x', name: 'Тест')],
@@ -67,7 +67,7 @@ void main() {
         parseIppResponse(await s.handle('x', (req(IppOp.getJobAttributes)..integer('job-id', id)).build()))
             .first<int>('job-state');
     expect(await state(), 5);
-    finish.complete(false);
+    finish.complete('немає паперу');
     await pumpEventQueue();
     await Future<void>.delayed(const Duration(milliseconds: 100)); // видалення тимчасового файла
     expect(await state(), 8, reason: 'друк не вдався — завдання перерване');

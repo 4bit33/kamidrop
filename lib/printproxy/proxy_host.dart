@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../discovery/discovery.dart';
+import '../l10n/l10n.dart';
 import '../printing/compose.dart';
 import '../printing/print_service.dart';
 import '../printing/sources.dart';
@@ -16,6 +17,9 @@ class PrintProxyHost {
   late final server = IppProxyServer(printers: _printers, onJob: _print);
 
   static const _suffix = ' (KamiDrop)';
+
+  /// Скільки завдання чекає, поки принтер знайдеться й віддасть можливості.
+  static const readyWait = Duration(seconds: 45);
 
   /// Назва принтера в Windows.
   static String systemName(DiscoveredPrinter p) => '${_model(p)}$_suffix';
@@ -57,12 +61,35 @@ class PrintProxyHost {
     }
   }
 
-  Future<bool> _print(ProxyJob job) async {
-    final printer = _ready.where((p) => proxySlug(p.id) == job.slug).firstOrNull;
-    if (printer == null) return false;
+  /// Журнал завдань від системи (вікна в нас немає — інакше причину невдачі ніде не видно).
+  static File get logFile => File('${Directory.systemTemp.path}/kamidrop-proxy.log');
+
+  Future<String?> _print(ProxyJob job) async {
+    String? error;
+    try {
+      error = await _send(job);
+    } catch (e) {
+      error = '$e';
+    }
+    try {
+      await logFile.writeAsString('${DateTime.now()} «${job.name}» → ${job.slug}: ${error ?? 'ok'}\n',
+          mode: FileMode.append);
+    } catch (_) {}
+    return error;
+  }
+
+  Future<String?> _send(ProxyJob job) async {
+    // Завдання часто приходить одразу після запуску KamiDrop (черга Windows чекала на нас),
+    // коли можливості принтера ще не отримано, — даємо йому час з'явитися.
+    DiscoveredPrinter? printer;
+    for (var i = 0; i < readyWait.inSeconds && printer == null; i++) {
+      printer = _ready.where((p) => proxySlug(p.id) == job.slug).firstOrNull;
+      if (printer == null) await Future<void>.delayed(const Duration(seconds: 1));
+    }
+    if (printer == null) return l10n.capsUnknownYet;
     final source = await PrintSource.open(job.path);
     try {
-      var ok = false;
+      String? error = l10n.unknownIppError;
       // Система вже зробила PDF потрібного розміру й орієнтації — друкуємо 1:1.
       await for (final p in printDocument(
         printer,
@@ -70,9 +97,9 @@ class PrintProxyHost {
         PrintOptions(color: job.color, duplex: job.duplex, copies: job.copies),
         layout: const LayoutOptions(scale: LayoutScale.actual),
       )) {
-        ok = p.stage == PrintStage.done;
+        error = p.stage == PrintStage.done ? null : p.message;
       }
-      return ok;
+      return error;
     } finally {
       await source.dispose();
     }
