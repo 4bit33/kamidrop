@@ -108,7 +108,17 @@ class _KamiDropAppState extends State<KamiDropApp> {
         builder: (context, child) {
           final l = L10n.of(context);
           setL10n(l);
-          return KeyedSubtree(key: ValueKey(l.localeName), child: child!);
+          // ПК: розгорнуте вікно не розтягує картки на весь екран — вміст колонкою по центру.
+          // ponytail: одна колонка на всі екрани; дві колонки (напр. сканер: превʼю | налаштування) — якщо попросять.
+          return ColoredBox(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 680),
+                child: KeyedSubtree(key: ValueKey(l.localeName), child: child!),
+              ),
+            ),
+          );
         },
         home: PrinterListScreen(
           discovery: discovery,
