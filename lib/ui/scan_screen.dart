@@ -261,16 +261,19 @@ class _ScanScreenState extends State<ScanScreen> {
     return where;
   }
 
-  /// ПК: один файл — діалог «Зберегти як», кілька — вибір папки. null — користувач скасував.
+  /// ПК: один файл — діалог «Зберегти як», кілька — вибір папки (відкриваються в «Завантаженнях»).
+  /// null — користувач скасував.
   Future<String?> _saveAs(List<File> files) async {
     String nameOf(File f) => f.uri.pathSegments.last;
+    final downloads = (await getDownloadsDirectory())?.path;
     if (files.length == 1) {
-      final location = await getSaveLocation(suggestedName: nameOf(files.single));
+      final location =
+          await getSaveLocation(suggestedName: nameOf(files.single), initialDirectory: downloads);
       if (location == null) return null;
       await files.single.copy(location.path);
       return location.path;
     }
-    final dir = await getDirectoryPath();
+    final dir = await getDirectoryPath(initialDirectory: downloads);
     if (dir == null) return null;
     String? last;
     for (final f in files) {
